@@ -79,7 +79,7 @@
 .auth-art ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
 .auth-art li { padding-left: 28px; position: relative; font-weight: 600; color: #c9d6ea; }
 .auth-art li::before { content: ''; position: absolute; left: 0; top: 7px; width: 14px; height: 8px; border-left: 2.5px solid #f59e6b; border-bottom: 2.5px solid #f59e6b; transform: rotate(-45deg); }
-.auth-paper { position: absolute; right: -120px; bottom: -80px; width: 380px; height: 480px; transform: rotate(-12deg); border-radius: 10px; background: #f4f2ed repeating-linear-gradient(#f4f2ed 0 33px, #c9d6e8 33px 34px); box-shadow: 0 30px 60px rgba(0,0,0,.35); opacity: .9; }
+.auth-paper { position: absolute; right: -150px; bottom: -190px; width: 360px; height: 460px; z-index: 0; transform: rotate(-12deg); border-radius: 10px; background: #f4f2ed repeating-linear-gradient(#f4f2ed 0 33px, #c9d6e8 33px 34px); box-shadow: 0 30px 60px rgba(0,0,0,.35); opacity: .55; }
 .auth-main { display: grid; place-items: center; padding: 32px 24px; background: var(--bg); }
 .auth-card { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px; }
 .auth-card h1 { font-family: var(--font-display); font-weight: 700; }

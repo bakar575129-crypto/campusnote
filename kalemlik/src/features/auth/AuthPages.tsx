@@ -10,6 +10,7 @@ function AuthLayout({title, subtitle, children}: {title: string; subtitle: strin
   return (
     <div className="auth">
       <aside className="auth-art" aria-hidden="true">
+        <div className="auth-paper" />
         <div className="auth-art-inner">
           <Brand />
           <h2>Ders notların, planın ve odağın tek defterde.</h2>
@@ -19,7 +20,6 @@ function AuthLayout({title, subtitle, children}: {title: string; subtitle: strin
             <li>Ders programı, ödev ve sınav takvimi, Pomodoro</li>
             <li>İnternet gitse de yazmaya devam et</li>
           </ul>
-          <div className="auth-paper" />
         </div>
       </aside>
       <main className="auth-main">

@@ -31,7 +31,7 @@ await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
 
 step('PDF içe aktar → defter');
 await page.locator('input[type=file][accept*="pdf"]').first().setInputFiles(pdfPath);
-await page.waitForURL('**/defter/**', {timeout: 30000, waitUntil: 'commit'}).catch(async e => { console.log('TOAST:', await page.locator('.toast').allInnerTexts(), errors, await page.locator('.notice').allInnerTexts()); await page.screenshot({path: '/tmp/claude-0/-home-user-campusnote/0a7f8e02-17e4-5da2-ac6b-0ca508431483/scratchpad/shots/pdf.png'}); throw e; });
+await page.waitForURL('**/defter/**', {timeout: 30000, waitUntil: 'commit'});
 await page.getByRole('button', {name: 'Defteri aç'}).click();
 await page.waitForSelector('.viewport canvas');
 assert.match(await page.locator('.page-nav-label').innerText(), /Sayfa 1 \/ 3/);
