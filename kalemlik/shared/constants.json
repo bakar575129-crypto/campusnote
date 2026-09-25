@@ -1,0 +1,8 @@
+{
+  "papers": ["blank","lined","narrow","wide","margin","grid","grid-small","grid-large","dotted","cornell","cornell-grid","cornell-dotted","lab","vocabulary","weekly","mindmap","engineering","coordinate","polar","semilog","loglog","isometric","hexagonal","music"],
+  "pens": ["ballpoint","fountain","pencil","fineliner","brush","marker","highlighter"],
+  "shapes": ["line","arrow","square","rectangle","circle","ellipse","triangle","diamond","hexagon","star"],
+  "coverPatterns": ["none","theme","lined","grid","dotted","diagonal","checker","waves","triangles"],
+  "taskCategories": ["homework","exam","todo"],
+  "page": {"width": 1000, "height": 1414}
+}

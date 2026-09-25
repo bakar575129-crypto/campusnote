@@ -1,0 +1,55 @@
+{
+  "name": "kalemlik",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kalemlik — üniversite öğrencileri için dijital defter, planlayıcı ve odaklanma platformu",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "dev:api": "node --watch server/main.mjs",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "start": "node app.js",
+    "db:migrate": "node scripts/migrate.mjs",
+    "check": "node scripts/check-config.mjs",
+    "plan:grant": "node scripts/grant-plan.mjs",
+    "secret": "node -e \"console.log(require('node:crypto').randomBytes(32).toString('hex'))\"",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:api": "node --test tests/api/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "password:reset": "node scripts/reset-password.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "dotenv": "18.0.3",
+    "express": "5.2.1",
+    "helmet": "8.3.0",
+    "multer": "2.4.0",
+    "mysql2": "3.24.4",
+    "nodemailer": "10.0.10",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@fontsource/caveat": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/kalam": "5.3.0",
+    "@fontsource/lora": "5.3.0",
+    "@fontsource/nunito": "5.3.0",
+    "@fontsource/patrick-hand": "5.3.0",
+    "@fontsource/playpen-sans": "5.3.0",
+    "@types/node": "22.19.19",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "lucide-react": "1.48.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.3.289",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.1"
+  }
+}
