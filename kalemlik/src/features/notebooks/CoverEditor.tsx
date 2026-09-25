@@ -10,7 +10,8 @@ import {allFonts} from '@/features/fonts/fonts';
 import {PlacedLayer, placeSticker} from '@/features/stickers/PlacedLayer';
 import {StickerLibrary} from '@/features/stickers/StickerDialogs';
 import {CoverView} from './CoverView';
-import {COVER_PATTERN_NAMES, coverPatternUrl, coverTextColor} from './cover';
+import {COVER_PATTERN_NAMES, coverPatternUrl, coverTextColor, isCutePattern} from './cover';
+import type {CoverPattern} from '@/lib/constants';
 
 const clampPlaced = <T extends {x: number; y: number; w: number; h: number}>(p: T): T => ({...p, x: Math.max(-p.w / 2, Math.min(PAGE_W - p.w / 2, p.x)), y: Math.max(-p.h / 2, Math.min(PAGE_H - p.h / 2, p.y))});
 
@@ -43,17 +44,20 @@ export function CoverEditor({notebookId, open, onClose}: {notebookId: string; op
           </div>
           <div className="cover-editor-controls stack">
             <Field label="Kapak rengi"><ColorPicker value={draft.color} onChange={color => setDraft({...draft, color})} swatches={PALETTE} /></Field>
-            <div className="field">
-              <label>Desen</label>
-              <div className="pattern-grid" role="radiogroup" aria-label="Kapak deseni">
-                {COVER_PATTERNS.map(p => (
-                  <button key={p} type="button" role="radio" aria-checked={cover.pattern === p} className={`pattern-item ${cover.pattern === p ? 'is-on' : ''}`} onClick={() => set({pattern: p})}>
-                    <span className="pattern-swatch" style={{background: draft.color, backgroundImage: coverPatternUrl({...cover, pattern: p, patternOpacity: Math.max(0.35, cover.patternOpacity)}, nb.paper, draft.color)}} />
-                    <span>{COVER_PATTERN_NAMES[p]}</span>
-                  </button>
-                ))}
+            {([['Sevimli desenler', COVER_PATTERNS.filter(isCutePattern)], ['Sade desenler', COVER_PATTERNS.filter(p => !isCutePattern(p))]] as [string, CoverPattern[]][]).map(([title, list]) => (
+              <div className="field" key={title}>
+                <label>{title}</label>
+                <div className="pattern-grid" role="radiogroup" aria-label={title}>
+                  {list.map(p => (
+                    <button key={p} type="button" role="radio" aria-checked={cover.pattern === p} className={`pattern-item ${cover.pattern === p ? 'is-on' : ''}`}
+                      onClick={() => set(isCutePattern(p) && !isCutePattern(cover.pattern) ? {pattern: p, patternOpacity: 1, patternSize: 9} : !isCutePattern(p) && isCutePattern(cover.pattern) ? {pattern: p, patternOpacity: 0.18, patternSize: 5} : {pattern: p})}>
+                      <span className="pattern-swatch" style={{background: draft.color, backgroundImage: coverPatternUrl({...cover, pattern: p, patternOpacity: isCutePattern(p) ? 1 : Math.max(0.35, cover.patternOpacity), patternSize: isCutePattern(p) ? 9 : cover.patternSize}, nb.paper, draft.color)}} />
+                      <span>{COVER_PATTERN_NAMES[p]}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
             {cover.pattern !== 'none' && <>
               <Slider label="Desen yoğunluğu" value={cover.patternOpacity} min={0.05} max={1} step={0.01} onChange={patternOpacity => set({patternOpacity})} format={v => `%${Math.round(v * 100)}`} />
               <Slider label="Desen boyutu" value={cover.patternSize} min={2} max={20} step={0.5} onChange={patternSize => set({patternSize})} />

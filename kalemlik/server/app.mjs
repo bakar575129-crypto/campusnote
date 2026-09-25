@@ -11,10 +11,13 @@ import {createFiles} from './files.mjs';
 import {createMailer} from './mail.mjs';
 import {createOcr} from './ocr.mjs';
 import {currentPlan} from './plans.mjs';
+import {createAdmin} from './admin.mjs';
+import {createAppSettings} from './appSettings.mjs';
 
-const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan'];
+const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim'];
 
-export function createApp({pool, config, ocr = createOcr(config), mailer = createMailer(config)}) {
+export function createApp({pool, config, appSettings = createAppSettings(pool), ocr = createOcr(config, {appSettings}), mailer = createMailer(config)}) {
+  void appSettings.refresh();
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -24,7 +27,8 @@ export function createApp({pool, config, ocr = createOcr(config), mailer = creat
       useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        // 'wasm-unsafe-eval': cihazda el yazısı tanıma (WebAssembly) için gerekli; eval'e izin vermez.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         fontSrc: ["'self'", 'data:', 'blob:'],
@@ -76,6 +80,7 @@ export function createApp({pool, config, ocr = createOcr(config), mailer = creat
   app.use('/api', auth.requireAuth);
   app.use('/api', createSync({pool}));
   app.use('/api', createFiles({pool, config}));
+  app.use('/api/admin', createAdmin({pool, config, mailer, ocr, appSettings, createResetLink: auth.createResetLink}));
 
   app.post('/api/ocr', async (req, res) => {
     const image = typeof req.body?.image === 'string' ? req.body.image : '';
@@ -96,6 +101,7 @@ export function createApp({pool, config, ocr = createOcr(config), mailer = creat
   app.use('/api', (req, res) => res.status(404).json({error: 'İşlem bulunamadı.', code: 'NOT_FOUND'}));
 
   // ---- ön yüz (dist): index.html ve service worker önbelleğe alınmaz, hash'li varlıklar uzun süre önbellekte kalır
+  app.use('/ocr', express.static(path.join(config.dist, 'ocr'), {maxAge: '30d', index: false, fallthrough: false}));
   app.get('/sw.js', (req, res) => res.set({'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/'}).sendFile(path.join(config.dist, 'sw.js')));
   app.use('/assets', express.static(path.join(config.dist, 'assets'), {immutable: true, maxAge: '365d', index: false, fallthrough: false}));
   app.use(express.static(config.dist, {index: false, dotfiles: 'deny', maxAge: '1d'}));

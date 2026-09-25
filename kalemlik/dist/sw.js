@@ -1,6 +1,6 @@
 // Kalemlik service worker — çevrimdışı uygulama kabuğu.
 // API ve kullanıcı dosyaları burada önbelleğe alınmaz (onlar IndexedDB'de, kullanıcıya özel saklanır).
-const VERSION = 'kalemlik-v1';
+const VERSION = 'kalemlik-v2';
 const SHELL = `${VERSION}-shell`;
 
 self.addEventListener('install', event => {
@@ -51,7 +51,7 @@ self.addEventListener('fetch', event => {
   }
 
   // Hash'li derleme dosyaları, yazı tipleri, ikonlar: önce önbellek.
-  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || /\.(woff2?|png|svg|webmanifest)$/.test(url.pathname)) {
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/ocr/') || url.pathname.startsWith('/icons/') || /\.(woff2?|png|svg|webmanifest)$/.test(url.pathname)) {
     event.respondWith((async () => {
       const cached = await caches.match(req);
       if (cached) return cached;

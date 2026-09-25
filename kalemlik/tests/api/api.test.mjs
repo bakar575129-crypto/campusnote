@@ -9,6 +9,7 @@ import os from 'node:os';
 import mysql from 'mysql2/promise';
 import {readConfig, ROOT} from '../../server/config.mjs';
 import {createApp} from '../../server/app.mjs';
+import {migrate} from '../../server/migrate.mjs';
 
 const env = {
   NODE_ENV: 'test', APP_URL: 'http://localhost:3999',
@@ -18,7 +19,7 @@ const env = {
 };
 const config = readConfig(env);
 let pool, server, base;
-const fakeOcr = {configured: true, async transcribe() { return 'merhaba dünya'; }};
+const fakeOcr = {configured: true, status: () => ({configured: true, provider: 'anthropic', model: 'test', keyHint: '…test', lastError: null}), async transcribe() { return 'merhaba dünya'; }};
 const mails = [];
 const fakeMailer = {configured: true, async send(m) { mails.push(m); return true; }};
 
@@ -28,7 +29,7 @@ before(async () => {
   await conn.query('SET FOREIGN_KEY_CHECKS=0');
   for (const {t, k} of tables) await conn.query(`DROP ${k === 'VIEW' ? 'VIEW' : 'TABLE'} IF EXISTS \`${t}\``);
   await conn.query('SET FOREIGN_KEY_CHECKS=1');
-  await conn.query(await fs.readFile(path.join(ROOT, 'sql/schema.sql'), 'utf8'));
+  await migrate(conn);
   await conn.end();
   pool = mysql.createPool(config.db);
   const app = createApp({pool, config, ocr: fakeOcr, mailer: fakeMailer});
@@ -254,4 +255,85 @@ test('şifre değiştirme, sıfırlama ve OCR', async () => {
   assert.equal(r.body.text, 'merhaba dünya');
   r = await b('POST', '/api/ocr', {image: 'javascript:alert(1)'});
   assert.equal(r.status, 400);
+});
+
+test('yönetim paneli: abonelik, ek depolama/defter hakkı, şifre sıfırlama, hesap kapatma', async () => {
+  const admin = client(), user = client(), stranger = client();
+  // İlk hesap testlerin başında oluşturuldu (ayse) ve yöneticidir.
+  let r = await admin('POST', '/api/auth/login', {email: 'ayse@ornek.com', password: 'guclu-sifre-123'});
+  assert.equal(r.body.user.role, 'admin');
+  r = await user('POST', '/api/auth/register', {name: 'Bora', email: 'bora@ornek.com', password: 'guclu-sifre-555'});
+  const boraId = r.body.user.id;
+  await stranger('POST', '/api/auth/register', {name: 'Cem', email: 'cem@ornek.com', password: 'guclu-sifre-666'});
+  r = await stranger('GET', '/api/admin/users');
+  assert.equal(r.status, 403, 'yönetici olmayan erişemez');
+
+  r = await admin('GET', '/api/admin/users?q=bora');
+  assert.equal(r.body.users.length, 1);
+  assert.equal(r.body.users[0].plan.id, 'free');
+
+  // Ek hak: +2 GB, +3 defter → ücretsiz planda 5+3 = 8 defter, 500 MB + 2048 MB
+  r = await admin('POST', `/api/admin/users/${boraId}/grants`, {extraStorageMb: 2048, extraNotebooks: 3});
+  assert.equal(r.body.plan.notebookLimit, 8);
+  assert.equal(r.body.plan.storageBytes, (500 + 2048) * 1024 * 1024);
+  r = await user('GET', '/api/storage');
+  assert.equal(r.body.notebooks.limit, 8);
+
+  // Abonelik paketi
+  r = await admin('POST', `/api/admin/users/${boraId}/subscription`, {planId: 'pro', days: 30});
+  assert.equal(r.body.plan.id, 'pro');
+  assert.equal(r.body.plan.notebookLimit, null);
+  r = await admin('POST', `/api/admin/users/${boraId}/subscription`, {planId: 'free'});
+  assert.equal(r.body.plan.id, 'free');
+
+  // Plan düzenleme
+  r = await admin('PUT', '/api/admin/plans/free', {name: 'Ücretsiz', storageMb: 600, notebookLimit: 6, ocrDailyLimit: 30, priceMonthly: 0, active: true});
+  assert.equal(r.status, 200);
+  r = await user('GET', '/api/storage');
+  assert.equal(r.body.notebooks.limit, 9);
+  await admin('PUT', '/api/admin/plans/free', {name: 'Ücretsiz', storageMb: 500, notebookLimit: 5, ocrDailyLimit: 30, priceMonthly: 0, active: true});
+
+  // Şifre sıfırlama bağlantısı: yöneticiye döner, e-posta gönderilir, bağlantı çalışır
+  r = await admin('POST', `/api/admin/users/${boraId}/password-reset`);
+  assert.match(r.body.link, /sifre-sifirla\?token=/);
+  assert.equal(r.body.emailSent, true);
+  const token = decodeURIComponent(r.body.link.split('token=')[1]);
+  r = await stranger('POST', '/api/auth/reset', {token, password: 'bora-yeni-sifre-1'});
+  assert.equal(r.status, 200);
+  r = await user('GET', '/api/auth/me');
+  assert.equal(r.status, 401, 'sıfırlama sonrası eski oturumlar kapanır');
+
+  // Hesap kapatma: giriş yapamaz; yeniden açılınca girer
+  r = await admin('POST', `/api/admin/users/${boraId}/status`, {disabled: true});
+  assert.equal(r.status, 200);
+  r = await user('POST', '/api/auth/login', {email: 'bora@ornek.com', password: 'bora-yeni-sifre-1'});
+  assert.equal(r.status, 403);
+  await admin('POST', `/api/admin/users/${boraId}/status`, {disabled: false});
+  r = await user('POST', '/api/auth/login', {email: 'bora@ornek.com', password: 'bora-yeni-sifre-1'});
+  assert.equal(r.status, 200);
+
+  // Kendi hesabını kapatamaz
+  const [[me]] = await pool.execute("SELECT id FROM users WHERE email='ayse@ornek.com'");
+  r = await admin('POST', `/api/admin/users/${me.id}/status`, {disabled: true});
+  assert.equal(r.status, 400);
+
+  // Sistem: tanıma testi ve istatistik
+  r = await admin('POST', '/api/admin/system/ocr-test');
+  assert.equal(r.body.ok, true);
+  r = await admin('GET', '/api/admin/stats');
+  assert.ok(r.body.users.total >= 3);
+});
+
+test('hazır sticker ve galeri görseli sayfaya yerleşir', async () => {
+  const c = client();
+  await c('POST', '/api/auth/register', {name: 'Duru', email: 'duru@ornek.com', password: 'guclu-sifre-777'});
+  const nb = randomUUID();
+  await c('PUT', `/api/sync/notebook/${nb}`, {rev: 0, data: notebook({cover: {...cover, pattern: 'cats', stickers: [{id: 'k1', builtin: 'kedi', x: 10, y: 10, w: 100, h: 100, rot: 0}]}})});
+  const placed = {id: 'p1', builtin: 'papatya', x: 100, y: 100, w: 120, h: 120, rot: 15};
+  let r = await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: page(nb, {stickers: [placed]})});
+  assert.equal(r.status, 200);
+  r = await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: page(nb, {stickers: [{...placed, fileId: randomUUID()}]})});
+  assert.equal(r.status, 400, 'hem dosya hem hazır sticker olamaz');
+  r = await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: page(nb, {stickers: [{id: 'p2', x: 0, y: 0, w: 10, h: 10, rot: 0}]})});
+  assert.equal(r.status, 400, 'kaynağı olmayan görsel reddedilir');
 });

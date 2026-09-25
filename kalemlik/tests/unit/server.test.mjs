@@ -36,3 +36,37 @@ test('sayfa içeriği şeması kötü veriyi reddeder', () => {
   assert.equal(pageContent.safeParse({...ok, strokes: [{id: 'a', t: 'pen', c: 'red', w: 2, o: 1, pts: []}]}).success, false, 'renk HEX olmalı');
   assert.equal(entitySchemas.lesson.safeParse({title: 'x', day: 7, start: '09:00', end: '10:00', room: '', instructor: '', color: '#000000', note: ''}).success, false);
 });
+
+import Anthropic from '@anthropic-ai/sdk';
+import {createOcr, detectProvider, explainProviderError} from '../../server/ocr.mjs';
+
+test('OCR: anahtar biçiminden sağlayıcı ve anlaşılır hata', () => {
+  assert.equal(detectProvider('sk-ant-api03-abc'), 'anthropic');
+  assert.equal(detectProvider('sk-proj-abc'), 'openai');
+  assert.equal(detectProvider(''), null);
+  assert.equal(explainProviderError(401, 'invalid x-api-key').code, 'OCR_AUTH');
+  assert.equal(explainProviderError(400, 'Your credit balance is too low to access the Anthropic API').code, 'OCR_BILLING');
+  assert.equal(explainProviderError(404, 'model: claude-x not found').code, 'OCR_MODEL');
+  assert.equal(explainProviderError(429, 'rate').code, 'OCR_BUSY');
+});
+
+test('OCR: model bulunamazsa sıradaki modele geçer; panel anahtarı ortam değişkenini ezer', async () => {
+  const tried = [];
+  const factory = () => ({messages: {create: async ({model}) => {
+    tried.push(model);
+    if (model !== 'claude-sonnet-5') throw new Anthropic.NotFoundError(404, {type: 'error', error: {type: 'not_found_error', message: 'model not found'}}, 'model not found', new Headers());
+    return {stop_reason: 'end_turn', content: [{type: 'text', text: 'merhaba'}]};
+  }}});
+  const settings = {get: n => (n === 'ocr_api_key' ? 'sk-ant-panel' : '')};
+  const ocr = createOcr({ocr: {apiKey: 'sk-ant-env', model: 'claude-opus-5', openaiKey: '', openaiModel: 'gpt-4.1-mini'}}, {appSettings: settings, anthropicFactory: key => { assert.equal(key, 'sk-ant-panel'); return factory(); }});
+  assert.equal(await ocr.transcribe('AAAA', 'word'), 'merhaba');
+  assert.deepEqual(tried, ['claude-opus-5', 'claude-sonnet-5']);
+});
+
+test('OCR: OpenAI anahtarı ve bakiye hatası anlaşılır bildirilir', async () => {
+  const fetchImpl = async () => new Response(JSON.stringify({error: {code: 'insufficient_quota', message: 'You exceeded your current quota'}}), {status: 429});
+  const ocr = createOcr({ocr: {apiKey: '', model: 'claude-opus-5', openaiKey: 'sk-proj-x', openaiModel: 'gpt-4.1-mini'}}, {fetchImpl});
+  assert.equal(ocr.status().provider, 'openai');
+  await assert.rejects(ocr.transcribe('AAAA', 'word'), e => e.code === 'OCR_BILLING' && /bakiye/.test(e.message));
+  assert.match(ocr.status().lastError.detail, /insufficient_quota/);
+});

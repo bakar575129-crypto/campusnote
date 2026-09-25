@@ -1,7 +1,7 @@
 import {useRef} from 'react';
 import {Copy, RotateCcw, RotateCw, Trash2, ArrowUpToLine} from 'lucide-react';
 import type {Placed} from '@/lib/types';
-import {useFileUrl} from '@/lib/useFile';
+import {usePlacedUrl} from '@/lib/useFile';
 
 interface Props {
   items: Placed[];
@@ -18,7 +18,7 @@ interface Props {
 }
 
 function Item({p, pageW, pageH}: {p: Placed; pageW: number; pageH: number}) {
-  const url = useFileUrl(p.fileId);
+  const url = usePlacedUrl(p);
   return (
     <div className="placed" data-id={p.id} style={{left: `${(p.x / pageW) * 100}%`, top: `${(p.y / pageH) * 100}%`, width: `${(p.w / pageW) * 100}%`, height: `${(p.h / pageH) * 100}%`, transform: `rotate(${p.rot}deg)`}}>
       {url && <img src={url} alt="" draggable={false} />}
@@ -104,7 +104,8 @@ export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSel
 }
 
 /** Yeni stickerı alanın ortasına, uygun boyutta yerleştirir. */
-export function placeSticker(s: {fileId: string; width: number; height: number}, pageW: number, pageH: number, id: string): Placed {
-  const w = Math.min(pageW * 0.35, 320), h = w * (s.height / s.width);
-  return {id, fileId: s.fileId, x: pageW / 2 - w / 2, y: pageH / 2 - h / 2, w, h, rot: 0};
+export interface PlaceSource {fileId?: string; builtin?: string; width: number; height: number}
+export function placeSticker(s: PlaceSource, pageW: number, pageH: number, id: string, widthRatio = 0.3): Placed {
+  const w = Math.min(pageW * widthRatio, s.builtin ? 220 : 600), h = w * (s.height / s.width);
+  return {id, ...(s.builtin ? {builtin: s.builtin} : {fileId: s.fileId}), x: pageW / 2 - w / 2, y: pageH / 2 - h / 2, w, h, rot: 0};
 }

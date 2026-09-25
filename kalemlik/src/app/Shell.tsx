@@ -1,5 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
+import {Shield, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
 import {Brand} from '@/components/Brand';
 import {linkProps, useLocation} from './router';
 import {logout, useSession} from './session';
@@ -54,6 +54,7 @@ export function Shell({children}: {children: ReactNode}) {
   const [open, setOpen] = useState(false);
   const [more, setMore] = useState(false);
   const isActive = (to: string) => path === to || (to === '/defterler' && path === '/');
+  const bottom = user?.role === 'admin' ? [...NAV_BOTTOM, {to: '/yonetim', label: 'Yönetim', icon: Shield}] : NAV_BOTTOM;
   useEffect(() => { setOpen(false); setMore(false); }, [path]);
 
   const sidebar = (
@@ -61,7 +62,7 @@ export function Shell({children}: {children: ReactNode}) {
       <div className="sidebar-brand"><Brand /></div>
       <div className="nav-group">{NAV.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
       <div className="spacer" />
-      <div className="nav-group">{NAV_BOTTOM.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
+      <div className="nav-group">{bottom.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
       <div className="sidebar-foot">
         <div className="user-chip"><span className="avatar">{user?.name.slice(0, 1).toLocaleUpperCase('tr')}</span><span className="user-name">{user?.name}</span>
           <button type="button" className="icon-btn icon-btn-sm" aria-label="Çıkış yap" title="Çıkış yap" onClick={() => void logout()}><LogOut size={18} /></button>
@@ -91,7 +92,7 @@ export function Shell({children}: {children: ReactNode}) {
         <>
           <div className="sidebar-scrim" onClick={() => setMore(false)} />
           <div className="more-sheet" role="dialog" aria-label="Diğer bölümler">
-            {[...NAV.filter(n => !TABS.includes(n.to)), ...NAV_BOTTOM].map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} onClick={() => setMore(false)} />)}
+            {[...NAV.filter(n => !TABS.includes(n.to)), ...bottom].map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} onClick={() => setMore(false)} />)}
           </div>
         </>
       )}

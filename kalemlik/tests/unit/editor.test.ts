@@ -170,3 +170,23 @@ test('ayarlar eksik/eski kayıtla da güvenli', () => {
   assert.equal(s.focus.work, 25);
   assert.equal(s.write.mode, 'off');
 });
+
+import {BUILTIN_STICKERS, builtinSvg} from '@/features/stickers/builtin';
+import {coverPatternSvg, CUTE_PATTERNS} from '@/features/notebooks/cover';
+
+/** SVG görsel olarak (img/tuval) açılınca katı XML kuralları geçerlidir: yinelenen öznitelik = boş görsel. */
+function assertWellFormed(svg: string, name: string) {
+  for (const tag of svg.match(/<[a-zA-Z][^>]*>/g) || []) {
+    const names = [...tag.matchAll(/\s([a-zA-Z:-]+)=/g)].map(m => m[1]);
+    assert.equal(new Set(names).size, names.length, `${name}: yinelenen öznitelik → ${tag.slice(0, 80)}`);
+  }
+  const opened = (svg.match(/<(?!\/)[a-zA-Z][^>]*[^/]>/g) || []).length, closed = (svg.match(/<\/[a-zA-Z]+>/g) || []).length;
+  assert.equal(opened, closed, `${name}: açılan/kapanan etiket sayısı eşit olmalı`);
+}
+
+test('hazır stickerlar ve sevimli kapak desenleri geçerli SVG', () => {
+  assert.ok(BUILTIN_STICKERS.length >= 40);
+  assert.equal(new Set(BUILTIN_STICKERS.map(s => s.id)).size, BUILTIN_STICKERS.length, 'kimlikler benzersiz');
+  for (const s of BUILTIN_STICKERS) assertWellFormed(builtinSvg(s.id), s.id);
+  for (const p of Object.keys(CUTE_PATTERNS)) assertWellFormed(coverPatternSvg(p as never, '#ffffff', 1, 9)!.markup, p);
+});

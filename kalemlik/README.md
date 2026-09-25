@@ -6,6 +6,17 @@
 
 **Kurulum:** [KURULUM.md](KURULUM.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
 
+## 1.1.0'da yenilikler
+
+- **API'siz el yazısı tanıma:** yazı tipi kipinde el yazısı artık **cihazda** (internetsiz, ücretsiz; Türkçe dil verisiyle) tanınır. API anahtarı varsa önce sunucu denenir, olmazsa cihaz; ikisi de emin değilse el yazısı korunur.
+- **Sunucu tanıma hatası giderildi:** anahtarın sağlayıcısı (Anthropic `sk-ant-…` / OpenAI `sk-…`) otomatik anlaşılır, hesapta olmayan Claude modelinde başka modele geçilir, gerçek hata nedeni (geçersiz anahtar, bakiye yok, model yok…) yönetim panelinde gösterilir. Anahtar `.env` yerine **yönetim panelinden** de girilebilir (yeniden başlatma gerekmez).
+- **Galeriden görsel:** sayfaya fotoğraf/görsel eklenir; taşınır, köşeden boyutlandırılır, döndürülür, çoğaltılır, silinir.
+- **Yönetim paneli** (`/yonetim`, yalnızca yönetici): kullanıcı arama, abonelik paketi verme (süreli), ek GB depolama ve ek defter hakkı, şifre sıfırlama bağlantısı (e-posta + kopyalanabilir bağlantı), hesabı kapatma/açma, yönetici yapma, plan limitlerini düzenleme, tanıma anahtarı ve bağlantı testi, e-posta testi, istatistikler.
+- **44 hazır sevimli sticker:** hayvanlar, böcekler, yiyecekler, doğa, okul, etiketler ("Harika!", "Sınav günü"…), washi bantlar.
+- **14 sevimli kapak deseni:** patiler, kediler, tavşanlar, ayıcıklar, papatyalar, laleler, arılar, uğur böcekleri, kelebekler, kalpler, yıldızlar, çilekler, bulutlar, mantarlar.
+- **Kapaktan sayfalara kaydırarak geçiş:** defter açılınca kapağın hemen altında ilk sayfa görünür; aşağı kaydırınca deftere geçilir ("aç" düğmesi yok). İlk sayfanın başında yukarı kaydırınca kapağa dönülür.
+- Veritabanı geçişleri sunucu açılışında **otomatik** uygulanır.
+
 ## Özellikler
 
 **Defterler** — ad, ders, dönem, renk, kapak; favoriler, çöp kutusu (geri getir / kalıcı sil / çöpü boşalt), kopyala, ara, ders ve döneme göre süz, kart/liste görünümü. Defter açılınca ilk ekran kapaktır.
@@ -24,11 +35,11 @@
 
 **Otomatik el yazısı düzeltme** — kapalı / kelime / cümle. Kalem kısa süre durunca (0,2–1,5 sn, ayarlanabilir) çalışır; yazarken hiçbir şey kaymaz. Satırlara ve kelimelere ayırır; çizgili sayfada satır çizgisine, kareli sayfada karelerin içine oturtur; okunur boyuttaki yazıyı küçültmez; kelimeleri üst üste bindirmez, sağdaki yazıyı iter, taşan kelimeyi alt satıra alır; boyut, kalınlık, harf aralığı ayarlanır; tek adımda geri alınır.
 - **Kendi el yazım**: yazı metne çevrilmeden hizalanır (cihazda, internetsiz).
-- **Yazı tipiyle**: yazı sunucu üzerinden tanınır ve seçilen yazı tipinde metne dönüşür; tanıma başarısız olursa el yazısı silinmez, düzeltilerek korunur.
+- **Yazı tipiyle**: yazı tanınır ve seçilen yazı tipinde metne dönüşür — cihazda (internetsiz) ya da API anahtarı tanımlıysa sunucuda. Tanıma emin değilse el yazısı silinmez, düzeltilerek korunur.
 
 **Yazı tipleri** — 7 hazır Türkçe karakterli yazı tipi (Caveat, Kalam, Patrick Hand, Playpen Sans, Nunito, Lora, JetBrains Mono); TTF/OTF/WOFF/WOFF2 yükleme (≤5 MB), eksik Türkçe harf uyarısı, hesapla eşitlenir.
 
-**Sticker** — fotoğraftan oluştur: kırp (orijinal/kare/daire/yuvarlak köşe), yakınlaştır/konumla, arka planı kaldır (dokunulan renkten, hassasiyet ayarlı), beyaz kenar; kişisel arşiv. Sayfada ve kapakta taşı, büyüt/küçült, döndür, çoğalt, öne getir, sil.
+**Sticker** — 44 hazır sevimli sticker; fotoğraftan oluştur: kırp (orijinal/kare/daire/yuvarlak köşe), yakınlaştır/konumla, arka planı kaldır (dokunulan renkten, hassasiyet ayarlı), beyaz kenar; kişisel arşiv. Sayfada ve kapakta taşı, büyüt/küçült, döndür, çoğalt, öne getir, sil.
 
 **PDF** — PDF'i (150 sayfaya kadar) içe aktar; her sayfa yazılabilir defter sayfası olur (yatay sayfalar korunur). Üzerine yaz, çiz, sticker ekle; kapakla birlikte PDF olarak indir.
 
@@ -88,13 +99,13 @@ kalemlik/
 
 ## Testler
 
-- 18 birim testi: otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
-- 7 API testi (MariaDB): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, silme izi, defter sınırı ve plan, dosya yükleme/imza/kota/temizlik, doğrulama, şifre değiştirme/sıfırlama, OCR.
-- 4 tarayıcı testi (`tests/e2e`): genel akış, PDF/sticker/yazı tipi/otomatik düzeltme, dokunmatik (yalnızca kalem, sıkıştırma, kilit, avuç içi), çevrimdışı PWA.
+- 22 birim testi (sticker/desen SVG geçerliliği ve OCR sağlayıcı mantığı dahil): otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
+- 9 API testi (MariaDB; yönetim paneli ve hazır sticker şeması dahil): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, silme izi, defter sınırı ve plan, dosya yükleme/imza/kota/temizlik, doğrulama, şifre değiştirme/sıfırlama, OCR.
+- 6 tarayıcı testi (`tests/e2e`): genel akış, PDF/sticker/yazı tipi/otomatik düzeltme, dokunmatik (yalnızca kalem, sıkıştırma, kilit, avuç içi), çevrimdışı PWA, 1.1 özellikleri (kaydırarak geçiş, hazır sticker, galeri görseli, sevimli kapak, cihazda tanıma), yönetim paneli.
 
 ## Bilinen sınırlar
 
 - Çevrimiçi ödeme sağlayıcısı entegre değildir; altyapı hazırdır, planlar yönetici betiğiyle atanır (docs/ODEME.md).
-- El yazısını metne çevirme için sunucuya Anthropic API anahtarı gerekir. Anahtar yoksa "kendi el yazım" düzeltmesi çalışır.
+- Cihazda tanıma düzgün, ayrık yazılmış el yazısında iyi çalışır; çok bitişik/dağınık yazıda emin olamaz ve el yazısını korur. Bu durumlar için yönetim panelinden bir API anahtarı eklemek isabeti artırır.
 - Arka plan temizleme düz/sade arka planlarda iyi sonuç verir; karmaşık fotoğraflarda kırpma önerilir.
 - Aynı sayfa iki cihazda aynı anda düzenlenirse iki sürüm de korunur (ikincisi ayrı sayfa olur); gerçek zamanlı ortak düzenleme yoktur.

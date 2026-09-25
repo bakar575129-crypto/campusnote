@@ -107,6 +107,14 @@ export function loadImage(id: string): Promise<HTMLImageElement | null> {
   return job;
 }
 
+/** Yerleştirilen görseli (hazır sticker veya kullanıcı dosyası) çizim için yükler. */
+export function loadPlacedImage(p: {fileId?: string; builtin?: string}, builtinUrl: (id: string) => string): Promise<HTMLImageElement | null> {
+  if (p.builtin) {
+    return new Promise(resolve => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => resolve(null); img.src = builtinUrl(p.builtin!); });
+  }
+  return p.fileId ? loadImage(p.fileId) : Promise.resolve(null);
+}
+
 /** Bellekte yüklü görseli senkron döndürür (çizim sırasında beklememek için). */
 const loadedImages = new Map<string, HTMLImageElement>();
 export function cachedImage(id: string, onReady?: () => void): HTMLImageElement | null {

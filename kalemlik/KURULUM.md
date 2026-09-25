@@ -76,11 +76,16 @@ Siteyi açıp **Kayıt ol** ile ilk hesabı oluşturun — ilk hesap otomatik ol
 
 ## 8. İsteğe bağlı özellikler
 
-**El yazısını metne çevirme (OCR):** `.env` içine `ANTHROPIC_API_KEY=...` ekleyin. Anahtar yalnızca sunucuda kalır. Günlük kullanıcı başına sınır plan tablosundaki `ocr_daily_limit` alanından gelir. Anahtar yoksa "Kendi el yazım" düzeltmesi yine çalışır.
+**El yazısını metne çevirme:** Anahtar gerekmez — tanıma varsayılan olarak **cihazda** (tarayıcıda, internetsiz) çalışır. Daha dağınık el yazısında isabet için isteğe bağlı olarak bir yapay zekâ anahtarı ekleyebilirsiniz:
+- En kolayı: **Yönetim → Sistem → El yazısı tanıma** alanına anahtarı yapıştırıp **Kaydet**, sonra **Bağlantıyı test et**. Yeniden başlatma gerekmez; hata varsa gerçek nedeni (geçersiz anahtar, bakiye yok, model yok) orada yazar.
+- Veya `.env`: `ANTHROPIC_API_KEY=sk-ant-...` ya da `OPENAI_API_KEY=sk-...` (sonra uygulamayı **Restart** edin).
+Anahtar yalnızca sunucuda kalır. Kullanıcı başına günlük sunucu tanıma sınırı plandaki "günlük tanıma hakkı"dır; sınır dolunca tanıma cihazda sürer.
 
 **Şifre sıfırlama e-postası:** `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` ayarlayın (cPanel e-posta hesabınızın SMTP bilgileri). SMTP yoksa sıfırlama bağlantısı sunucu günlüğüne (`stderr.log`) yazılır; ayrıca `npm run password:reset -- e-posta` ile şifre doğrudan sıfırlanabilir.
 
-**Planlar:** Ücretsiz / Plus / Pro planları `plans` tablosundadır (depolama MB, defter sınırı — 0 = sınırsız, günlük tanıma). Değerleri phpMyAdmin'den değiştirebilirsiniz. Bir kullanıcıya plan tanımlamak için:
+**Yönetim paneli:** İlk kayıt olan hesap yöneticidir; menüde **Yönetim** görünür (`/yonetim`). Buradan kullanıcılara abonelik paketi (süreli), ek GB depolama ve ek defter hakkı verebilir, şifre sıfırlama bağlantısı gönderebilir (SMTP yoksa bağlantı size gösterilir, kopyalayıp iletirsiniz), hesap kapatabilir, başka yöneticiler atayabilir ve plan limitlerini düzenleyebilirsiniz.
+
+**Planlar:** Ücretsiz / Plus / Pro planları yönetim panelinden (Planlar sekmesi) veya `plans` tablosundan düzenlenir (depolama, defter sınırı — 0 = sınırsız, günlük tanıma). Komut satırından plan tanımlamak için:
 
 ```bash
 npm run plan:grant -- ogrenci@ornek.com plus 30
@@ -101,7 +106,7 @@ Uygulama bir kez internetle açıldıktan sonra çevrimdışı da açılır; aç
 
 1. Uygulamayı cPanel'den **Stop** edin.
 2. `.env` ve `storage/` klasörünü **koruyarak** yeni paketteki dosyaları üzerine kopyalayın (`dist/`, `server/`, `sql/`, `scripts/`, `shared/`, `package*.json`, `app.js`).
-3. `npm ci --omit=dev` → `npm run db:migrate` → **Restart**.
+3. `npm ci --omit=dev` → **Restart**. Veritabanı güncellemeleri sunucu açılırken otomatik uygulanır (isterseniz `npm run db:migrate` ile elle de çalıştırabilirsiniz).
 
 ## 11. Yedekleme
 
@@ -125,6 +130,7 @@ Testler: `npm test` (birim), `TEST_DB_NAME=... TEST_DB_USER=... TEST_DB_PASSWORD
 |---|---|
 | "Veritabanına bağlanılamadı" | `DB_*` ayarlarını ve kullanıcı yetkilerini kontrol edin; `npm run check` |
 | "Veritabanı tabloları eksik" | `npm run db:migrate` veya `sql/schema.sql`'i içe aktarın |
+| "Tanıma hizmeti yanıt vermedi" / tanıma çalışmıyor | Yönetim → Sistem → **Bağlantıyı test et**: gerçek neden yazılır (anahtar geçersiz, bakiye yok, model yok, sunucu dışarı bağlanamıyor). Anahtarsız da cihazda tanıma çalışır |
 | "İstek doğrulanamadı" (403) | `APP_URL` tarayıcıdaki adresle birebir aynı olmalı (http/https, www dahil) |
 | Uygulama açılmıyor | cPanel'deki `stderr.log`; `.env`'de eksik ayar varsa uygulama açıklayıcı hata ile durur |
 | Yüklemede "Depolama alanın doldu" | Plan & Depolama → kullanılmayan dosyaları temizle veya planı yükselt |

@@ -7,18 +7,24 @@ export async function currentPlan(db, userId, now = Date.now()) {
        FROM subscriptions s JOIN plans p ON p.id = s.plan_id
       WHERE s.user_id = ? AND s.status IN ('active','canceled') AND s.current_period_end > ?
       ORDER BY p.storage_mb DESC LIMIT 1`, [userId, now]);
-  if (sub) return describe(sub, sub);
+  const [[user]] = await db.execute('SELECT extra_storage_mb, extra_notebooks FROM users WHERE id=?', [userId]);
+  const extra = {storageMb: Number(user?.extra_storage_mb || 0), notebooks: Number(user?.extra_notebooks || 0)};
+  if (sub) return describe(sub, sub, extra);
   const [[free]] = await db.execute("SELECT * FROM plans WHERE id='free'");
   if (!free) throw new Error('plans tablosunda "free" planı yok. sql/schema.sql dosyasını yeniden içe aktarın.');
-  return describe(free, null);
+  return describe(free, null, extra);
 }
 
-function describe(plan, sub) {
+/** Yöneticinin verdiği ek depolama ve ek defter hakkı plana eklenir (sınırsız planda defter sınırı yoktur). */
+function describe(plan, sub, extra = {storageMb: 0, notebooks: 0}) {
+  const baseLimit = Number(plan.notebook_limit) || 0;
   return {
     id: plan.id,
     name: plan.name,
-    storageBytes: Number(plan.storage_mb) * MB,
-    notebookLimit: Number(plan.notebook_limit) || null,
+    storageBytes: (Number(plan.storage_mb) + extra.storageMb) * MB,
+    notebookLimit: baseLimit ? baseLimit + extra.notebooks : null,
+    extraStorageBytes: extra.storageMb * MB,
+    extraNotebooks: extra.notebooks,
     ocrDailyLimit: Number(plan.ocr_daily_limit),
     subscription: sub ? {
       status: sub.status,

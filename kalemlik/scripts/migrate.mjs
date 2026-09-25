@@ -1,17 +1,13 @@
-// Veritabanı şemasını (sql/schema.sql) uygular. Tekrar çalıştırmak güvenlidir.
-import fs from 'node:fs/promises';
-import path from 'node:path';
+// Veritabanı şemasını ve geçişleri uygular (sunucu açılışta da otomatik uygular). Tekrar çalıştırmak güvenlidir.
 import mysql from 'mysql2/promise';
-import {ROOT, readConfig} from '../server/config.mjs';
+import {readConfig} from '../server/config.mjs';
+import {migrate} from '../server/migrate.mjs';
 
 const config = readConfig();
-const sql = await fs.readFile(path.join(ROOT, 'sql', 'schema.sql'), 'utf8');
-const statements = sql.split(/;\s*$/m).map(s => s.replace(/^\s*--.*$/gm, '').trim()).filter(Boolean);
-const conn = await mysql.createConnection({...config.db, connectionLimit: undefined, waitForConnections: undefined, queueLimit: undefined});
+const conn = await mysql.createConnection({host: config.db.host, port: config.db.port, user: config.db.user, password: config.db.password, database: config.db.database, socketPath: config.db.socketPath, charset: 'utf8mb4'});
 try {
-  for (const statement of statements) await conn.query(statement);
-  const [[row]] = await conn.query('SELECT MAX(version) AS v FROM schema_migrations');
-  console.log(`Veritabanı hazır (şema sürümü ${row.v}).`);
+  const r = await migrate(conn);
+  console.log(`Veritabanı hazır (şema sürümü ${r.version}).${r.applied.length ? ' Uygulanan: ' + r.applied.join(', ') : ''}`);
 } finally {
   await conn.end();
 }

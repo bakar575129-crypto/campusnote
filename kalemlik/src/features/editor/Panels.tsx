@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
-import {ArrowRight, Circle, Diamond, Eraser, Hand, Hexagon, Lasso, Minus, RectangleHorizontal, Square, Star, Sticker, Triangle, Type, BoxSelect, Shapes} from 'lucide-react';
+import {ArrowRight, Circle, ImagePlus, Diamond, Eraser, Hand, Hexagon, Lasso, Minus, RectangleHorizontal, Square, Star, Sticker, Triangle, Type, BoxSelect, Shapes} from 'lucide-react';
 import type {PenId, ShapeId} from '@/lib/constants';
 import {HIGHLIGHT_COLORS, INK_COLORS} from '@/lib/constants';
 import type {PageContent, UserSettings} from '@/lib/types';
@@ -128,9 +128,15 @@ export function WritePanel({settings, ocrEnabled}: {settings: UserSettings; ocrE
       <Field label="Yazı" htmlFor="wp-font">
         <select id="wp-font" className="select" value={w.font} onChange={e => updateSettings({write: {font: e.target.value}})}>
           <option value="own">Kendi el yazım (cihazda, internetsiz)</option>
-          {allFonts().map(f => <option key={f.id} value={f.id} disabled={!ocrEnabled}>{f.name}{ocrEnabled ? '' : ' — tanıma kapalı'}</option>)}
+          {allFonts().map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
       </Field>
+      {w.font !== 'own' && <>
+        <div className="field"><label>Tanıma</label>
+          <Segmented label="Tanıma motoru" value={w.engine} onChange={engine => updateSettings({write: {engine}})} options={[{value: 'auto', label: 'Otomatik'}, {value: 'device', label: 'Yalnızca cihazda'}]} />
+        </div>
+        <p className="muted small">{w.engine === 'device' || !ocrEnabled ? 'Yazın bu cihazda, internetsiz tanınır. En iyi sonuç için harfleri ayrık ve düzgün yaz; emin olunamazsa kendi yazın korunur.' : 'Önce sunucudaki tanıma denenir; olmazsa cihazda tanınır. Emin olunamazsa kendi yazın korunur.'}</p>
+      </>}
       {w.font !== 'own' && <p className="write-preview" style={{fontFamily: fontStack(w.font), fontWeight: w.weight * 100, letterSpacing: w.spacing * 0.5}}>Çiğdem ağaçta şarkı söylüyor</p>}
       <Slider label="Boyut" value={w.size} min={0.6} max={1.3} step={0.05} onChange={size => updateSettings({write: {size}})} format={v => `%${Math.round(v * 100)}`} />
       <Slider label="Kalınlık" value={w.weight} min={1} max={9} onChange={weight => updateSettings({write: {weight}})} />
@@ -157,11 +163,12 @@ interface RailProps {
   settings: UserSettings;
   onTool(t: Tool): void;
   onSticker(): void;
+  onImage(): void;
   disabled: boolean;
   side: 'left' | 'right';
 }
 
-export function ToolRail({tool, settings, onTool, onSticker, disabled, side}: RailProps) {
+export function ToolRail({tool, settings, onTool, onSticker, onImage, disabled, side}: RailProps) {
   const [panel, setPanel] = useState<{kind: 'pen' | 'eraser' | 'shape'; anchor: HTMLElement} | null>(null);
   const placement = window.innerWidth < 700 ? 'top' : side === 'left' ? 'right' : 'left';
   const click = (e: React.MouseEvent<HTMLButtonElement>, t: Tool, kind?: 'pen' | 'eraser' | 'shape', pen?: PenId) => {
@@ -191,6 +198,7 @@ export function ToolRail({tool, settings, onTool, onSticker, disabled, side}: Ra
         <button type="button" className={`rail-tool ${tool === 'text' ? 'is-on' : ''}`} aria-pressed={tool === 'text'} aria-label="Metin" title="Metin (T)" disabled={disabled} onClick={e => click(e, 'text')}><Type size={22} /></button>
         <button type="button" className={`rail-tool ${tool === 'shape' ? 'is-on' : ''}`} aria-pressed={tool === 'shape'} aria-label="Şekiller" title="Şekiller" disabled={disabled} onClick={e => click(e, 'shape', 'shape')}><Shapes size={22} /></button>
         <button type="button" className="rail-tool" aria-label="Sticker ekle" title="Sticker" disabled={disabled} onClick={onSticker}><Sticker size={22} /></button>
+        <button type="button" className="rail-tool" aria-label="Galeriden görsel ekle" title="Galeriden görsel" disabled={disabled} onClick={onImage}><ImagePlus size={22} /></button>
         <button type="button" className={`rail-tool ${tool === 'hand' ? 'is-on' : ''}`} aria-pressed={tool === 'hand'} aria-label="Sayfayı kaydır" title="Sayfayı kaydır (H)" onClick={e => click(e, 'hand')}><Hand size={22} /></button>
       </div>
       <Popover anchor={panel?.anchor || null} open={!!panel} onClose={() => setPanel(null)} placement={placement} label={panel?.kind === 'pen' ? 'Kalem ayarları' : panel?.kind === 'eraser' ? 'Silgi ayarları' : 'Şekiller'}>

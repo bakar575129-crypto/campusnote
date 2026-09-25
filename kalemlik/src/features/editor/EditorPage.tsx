@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
-import {ArrowLeft, BookOpen, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardPaste, Copy, CopyPlus, Download, FileImage, FileUp, Info, Layers, LayoutTemplate, Lock, LockOpen, Maximize, MoreHorizontal, Palette, PenLine, Plus, Redo2, ScanText, Star, Trash2, Undo2, Wand2, ZoomIn, ZoomOut, X, MoveHorizontal, Settings2, Hand as HandIcon} from 'lucide-react';
+import {ArrowLeft, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, ChevronUp, ClipboardPaste, Copy, CopyPlus, Download, FileImage, FileUp, Info, Layers, LayoutTemplate, Lock, LockOpen, Maximize, MoreHorizontal, Palette, PenLine, Plus, Redo2, ScanText, Star, Trash2, Undo2, Wand2, ZoomIn, ZoomOut, X, MoveHorizontal, Settings2, Hand as HandIcon} from 'lucide-react';
 import type {Page, PageContent, Placed, Stroke, TextBox} from '@/lib/types';
+import {deviceOcrSupported, plausibleText, recognizeOnDevice, warmDeviceOcr} from './deviceOcr';
 import {INK_COLORS} from '@/lib/constants';
 import {navigate} from '@/app/router';
 import {useSession} from '@/app/session';
@@ -8,6 +9,7 @@ import {SyncBadge} from '@/app/Shell';
 import {Button, Dialog, Field, IconButton, Menu, Popover, type MenuItem} from '@/components/ui';
 import {confirmDialog, toast} from '@/components/feedback';
 import {api} from '@/lib/api';
+import {saveFile} from '@/lib/files';
 import {get, loadNotebookPages, onStoreEvent, put, remove, update, useList, useRecord} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
 import {shortId, uuid} from '@/lib/ids';
@@ -32,6 +34,37 @@ import {emptySelection, hasSelection} from './types';
 
 const byPosition = (a: Page, b: Page) => a.position - b.position || a.createdAt - b.createdAt;
 const snap = (p: Page): PageSnap | null => (p.content ? {id: p.id, position: p.position, content: p.content} : null);
+
+/**
+ * Defterin ilk ekranı: kapak ve hemen altında ilk sayfa görünür. Aşağı kaydırınca (tekerlek, parmak, kalem)
+ * doğrudan deftere geçilir; ayrıca "aç" düğmesine gerek yoktur.
+ */
+function CoverStage({nb, first, onEnter, onEditCover}: {nb: NonNullable<ReturnType<typeof get<'notebook'>>>; first?: Page; onEnter: () => void; onEditCover: () => void}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [peek, setPeek] = useState('');
+  const entered = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    if (first?.content) void import('./render').then(m => m.renderPage(first.content!, 0.5)).then(c => { if (alive) setPeek(c.toDataURL('image/jpeg', 0.8)); });
+    return () => { alive = false; };
+  }, [first?.content]);
+  const enter = () => { if (!entered.current && first) { entered.current = true; onEnter(); } };
+  return (
+    <div ref={ref} className="cover-stage" onScroll={e => { const el = e.currentTarget; if (el.scrollTop > el.clientHeight * 0.45) enter(); }}
+      onWheel={e => { if (e.deltaY > 0 && ref.current && ref.current.scrollTop + ref.current.clientHeight >= ref.current.scrollHeight - 4) enter(); }}>
+      <div className="cover-top">
+        <CoverView nb={nb} className="cover-open" />
+        <Button size="sm" variant="ghost" icon={<Palette size={16} />} onClick={onEditCover}>Kapağı düzenle</Button>
+      </div>
+      {first && (
+        <button type="button" className="cover-peek" onClick={enter} aria-label="İlk sayfaya geç">
+          <span className="scroll-hint"><ChevronDown size={18} /> Kaydırarak deftere geç</span>
+          <span className="page-peek" style={{aspectRatio: first.content ? `${first.content.width} / ${first.content.height}` : '1 / 1.414'}}>{peek && <img src={peek} alt="" />}</span>
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function EditorPage({id}: {id: string}) {
   const nb = useRecord('notebook', id);
@@ -61,6 +94,7 @@ export default function EditorPage({id}: {id: string}) {
   const clipboard = useRef<{strokes: Stroke[]; texts: TextBox[]} | null>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
   const imgInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
 
   const page = index > 0 ? pages[index - 1] : undefined;
   const content = page?.content;
@@ -189,6 +223,32 @@ export default function EditorPage({id}: {id: string}) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const writeRef = useRef(settings.write);
   writeRef.current = settings.write;
+  useEffect(() => { if (settings.write.mode !== 'off' && settings.write.font !== 'own' && (settings.write.engine === 'device' || !config?.ocrEnabled)) warmDeviceOcr(); }, [settings.write.mode, settings.write.font, settings.write.engine, config?.ocrEnabled]);
+
+  /**
+   * El yazısını metne çevirir: önce sunucu (API anahtarı tanımlıysa), olmazsa ya da başarısız olursa cihazda
+   * (internetsiz). İkisi de emin değilse hata döner ve el yazısı korunur.
+   */
+  const recognize = useCallback(async (strokes: Stroke[], mode: 'word' | 'block'): Promise<{text: string} | {error: string}> => {
+    const image = strokesToPng(strokes, (ctx, s) => drawStroke(ctx, s));
+    if (!image) return {error: ''};
+    let serverError = '';
+    if (writeRef.current.engine !== 'device' && config?.ocrEnabled && navigator.onLine) {
+      try {
+        const {text} = await api<{text: string}>('/api/ocr', {method: 'POST', json: {image, mode}});
+        if (text.trim()) return {text};
+      } catch (e) { serverError = e instanceof Error ? e.message.replace(/ Yazın korunuyor\.?$/, '') : ''; }
+    }
+    if (deviceOcrSupported()) {
+      try {
+        const r = await recognizeOnDevice(image, mode);
+        if (plausibleText(r)) return {text: r.text};
+        return {error: 'Yazı cihazda yeterince net okunamadı.'};
+      } catch { /* cihazda tanıma yüklenemedi */ }
+    }
+    return {error: serverError || 'Yazı tanınamadı.'};
+  }, [config?.ocrEnabled]);
+  const lastNotice = useRef(0);
 
   const runCorrection = useCallback(async () => {
     timer.current = null;
@@ -202,41 +262,35 @@ export default function EditorPage({id}: {id: string}) {
     const guide = writingGuide(cur);
     if (!looksLikeWriting(group, guide.gap)) return;
     const opts = {size: w.size, weight: w.weight, spacing: w.spacing};
-    const useOcr = w.font !== 'own' && !!config?.ocrEnabled && navigator.onLine;
-    if (!useOcr) {
+    if (w.font === 'own') {
       const next = correctHandwriting(cur.strokes, ids, cur, opts);
       if (next) commit({...cur, strokes: next}, pageId);
       return;
     }
     setDimIds(prev => new Set([...prev, ...ids]));
     const lines = splitLines(group, guide.gap);
-    const results = await Promise.all(lines.map(async line => {
-      const image = strokesToPng(line, (ctx, s) => drawStroke(ctx, s));
-      if (!image) return null;
-      try { return (await api<{text: string}>('/api/ocr', {method: 'POST', json: {image, mode: w.mode === 'word' ? 'word' : 'block'}})).text; }
-      catch (e) { return e instanceof Error ? e : null; }
-    }));
+    const results = await Promise.all(lines.map(line => recognize(line, w.mode === 'word' ? 'word' : 'block')));
     setDimIds(prev => { const n = new Set(prev); for (const i of ids) n.delete(i); return n; });
     const now = latest(pageId)?.content;
     if (!now) return;
     let strokes = now.strokes;
-    let failed: Error | null = null;
+    let failed = '';
     const fallback: string[] = [];
     lines.forEach((line, i) => {
       const r = results[i];
       const lineIds = line.map(s => s.id).filter(x => strokes.some(s => s.id === x));
       if (!lineIds.length) return;
-      if (typeof r === 'string') {
-        const color = line[0].c;
-        const replaced = replaceWithText(strokes, lineIds, now, r, w.font, color, opts);
+      if ('text' in r) {
+        const replaced = replaceWithText(strokes, lineIds, now, r.text, w.font, line[0].c, opts);
         if (replaced) { strokes = replaced; return; }
-      } else if (r instanceof Error) failed = r;
+      } else if (r.error) failed = r.error;
       fallback.push(...lineIds);
     });
     if (fallback.length) { const f = correctHandwriting(strokes, fallback, now, opts); if (f) strokes = f; }
-    if (failed) toast(`${(failed as Error).message.replace(/ Yazın korunuyor\.?$/, '')} El yazın düzeltilerek korundu.`, 'info');
+    // Her kelimede uyarı çıkmasın: en fazla dakikada bir bilgi verilir.
+    if (failed && Date.now() - lastNotice.current > 60000) { lastNotice.current = Date.now(); toast(`${failed} El yazın düzeltilerek korundu.`, 'info'); }
     if (strokes !== now.strokes) commit({...now, strokes}, pageId);
-  }, [latest, commit, config?.ocrEnabled]);
+  }, [latest, commit, recognize]);
 
   const onPenStroke = useCallback((strokeId: string) => {
     const w = writeRef.current;
@@ -281,14 +335,12 @@ export default function EditorPage({id}: {id: string}) {
   const ocrSelection = async () => {
     const strokes = selectedStrokes().filter(s => s.t === 'pen');
     if (!strokes.length) { toast('Metne çevirmek için el yazısı seç.', 'info'); return; }
-    if (!config?.ocrEnabled) { toast('Bu sunucuda el yazısı tanıma etkin değil.', 'error'); return; }
-    const image = strokesToPng(strokes, (ctx, s) => drawStroke(ctx, s));
-    if (!image) return;
     setBusy('El yazısı okunuyor…');
     try {
-      const {text} = await api<{text: string}>('/api/ocr', {method: 'POST', json: {image, mode: 'block'}});
-      setConvert({text, ids: strokes.map(s => s.id)});
-    } catch (e) { toast(e instanceof Error ? e.message : 'Tanıma yapılamadı. El yazın korunuyor.', 'error'); } finally { setBusy(''); }
+      const r = await recognize(strokes, 'block');
+      if ('text' in r) setConvert({text: r.text, ids: strokes.map(s => s.id)});
+      else toast(`${r.error || 'Yazı tanınamadı.'} El yazın korunuyor.`, 'error');
+    } finally { setBusy(''); }
   };
   const applyConvert = (replace: boolean) => {
     if (!convert || !content) return;
@@ -298,6 +350,37 @@ export default function EditorPage({id}: {id: string}) {
     commit({...content, strokes: replace ? content.strokes.filter(s => !convert.ids.includes(s.id)) : content.strokes, texts: [...content.texts, box]});
     setConvert(null);
     setSelection(emptySelection);
+  };
+
+  // ------------------------------------------------------------ galeriden görsel
+  /** Fotoğrafı sayfaya taşınabilir/boyutlandırılabilir görsel olarak ekler (büyük fotoğraflar küçültülür). */
+  const insertImage = async (file: File) => {
+    let target = content, targetIndex = index;
+    if (!target && pages[0]?.content) { target = pages[0].content; targetIndex = 1; setIndex(1); }
+    if (!target) return;
+    if (!file.type.startsWith('image/')) { toast('Bir fotoğraf ya da görsel seç.', 'error'); return; }
+    if (file.size > 40 * 1024 * 1024) { toast('Görsel 40 MB’den küçük olmalı.', 'error'); return; }
+    setBusy('Görsel hazırlanıyor…');
+    try {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = url;
+      await img.decode().catch(() => { throw new Error('Bu görsel açılamadı. JPG, PNG veya WEBP dene.'); });
+      const scale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      const alpha = /png|webp|gif/.test(file.type);
+      const blob = await new Promise<Blob>((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('Görsel hazırlanamadı.'))), alpha ? 'image/png' : 'image/jpeg', 0.88));
+      const fileId = await saveFile(blob, 'image', file.name.replace(/\.[^.]+$/, '') + (alpha ? '.png' : '.jpg'));
+      const p = placeSticker({fileId, width: c.width, height: c.height}, target.width, target.height, shortId(), 0.6);
+      commit({...target, stickers: [...target.stickers, p]}, pages[targetIndex - 1].id);
+      setTool('select');
+      setActiveSticker(p.id);
+      toast('Görsel eklendi. Sürükleyerek taşı, köşeden boyutlandır, üstten döndür.', 'success');
+    } catch (e) { toast(e instanceof Error ? e.message : 'Görsel eklenemedi.', 'error'); } finally { setBusy(''); }
   };
 
   // ------------------------------------------------------------ metin ve sticker
@@ -379,6 +462,7 @@ export default function EditorPage({id}: {id: string}) {
     ...(clipboard.current ? [{label: 'Yapıştır', icon: <ClipboardPaste size={17} />, disabled: !writable, onSelect: () => paste()}] : []),
     'sep',
     {label: 'PDF içe aktar (sayfa olarak)', icon: <FileUp size={17} />, onSelect: () => pdfInput.current?.click()},
+    {label: 'Galeriden görsel ekle', icon: <ImagePlus size={17} />, onSelect: () => galleryInput.current?.click()},
     {label: 'Fotoğrafı sayfa yap', icon: <FileImage size={17} />, onSelect: () => imgInput.current?.click()},
     {label: 'PDF olarak indir', icon: <Download size={17} />, onSelect: () => void exportPdf()},
     'sep',
@@ -424,17 +508,11 @@ export default function EditorPage({id}: {id: string}) {
       <div className="editor-body">
         <ToolRail tool={tool} settings={settings} side={settings.railSide} disabled={!writable}
           onTool={t => { setTool(t); if (t !== 'select' && t !== 'lasso') setSelection(emptySelection); if (t !== 'select') setActiveSticker(null); if (t !== 'text') activateText(null); if (index === 0 && pages.length) setIndex(1); }}
-          onSticker={() => setStickers(true)} />
+          onSticker={() => setStickers(true)} onImage={() => galleryInput.current?.click()} />
 
         <div className="stage">
           {index === 0 ? (
-            <div className="cover-stage" onWheel={e => { if (e.deltaY > 40 && pages.length) setIndex(1); }}>
-              <CoverView nb={nb} className="cover-open" />
-              <div className="cover-actions">
-                <Button icon={<Palette size={18} />} onClick={() => setCoverEdit(true)}>Kapağı düzenle</Button>
-                <Button variant="primary" icon={<BookOpen size={18} />} disabled={!pages.length} onClick={() => setIndex(1)}>Defteri aç</Button>
-              </div>
-            </div>
+            <CoverStage nb={nb} first={pages[0]} onEnter={() => { if (pages.length) setIndex(1); }} onEditCover={() => setCoverEdit(true)} />
           ) : !content ? (
             <div className="stage-loading">{loading || navigator.onLine ? <><span className="spinner" /> Sayfa yükleniyor…</> : 'Bu sayfa bu cihazda yok. İnternete bağlanınca açılacak.'}</div>
           ) : (
@@ -444,7 +522,7 @@ export default function EditorPage({id}: {id: string}) {
               onStylusAction={a => { if (a === 'undo') { undo(); return true; } return false; }}
               onTap={(x, y) => { if (tool === 'text') { if (activeText) activateText(null); else createText(x, y); } }}
               onViewChange={setView}
-              onOverscroll={dir => setIndex(i => Math.max(1, Math.min(pages.length, i + dir)))}
+              onOverscroll={dir => setIndex(i => Math.max(0, Math.min(pages.length, i + dir)))}
               selectionTools={selectionTools}
               overlay={<>
                 <PlacedLayer items={content.stickers} pageW={content.width} pageH={content.height} selectedId={activeSticker} interactive={tool === 'select'}
@@ -489,6 +567,7 @@ export default function EditorPage({id}: {id: string}) {
       </div>
 
       <input ref={pdfInput} type="file" accept="application/pdf,.pdf" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importPagesFrom(f, 'pdf'); }} />
+      <input ref={galleryInput} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void insertImage(f); }} />
       <input ref={imgInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importPagesFrom(f, 'image'); }} />
 
       <Menu anchor={menu} open={!!menu} onClose={() => setMenu(null)} label="Diğer işlemler" items={moreItems} />

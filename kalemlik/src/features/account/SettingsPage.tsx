@@ -104,12 +104,13 @@ export function SettingsPage() {
         <h2>Otomatik yazı düzeltme</h2>
         <p className="muted small">Kalemle yazıp kısa bir süre durduğunda yazın satıra (çizgili) veya karelerin içine (kareli) oturtulur. Yazarken hiçbir şey kaymaz; tek dokunuşla geri alınır.</p>
         <div className="field"><label>Kip</label><Segmented label="Düzeltme kipi" value={s.write.mode} onChange={mode => updateSettings({write: {mode}})} options={WRITE_MODES} /></div>
-        <Field label="Yazı" htmlFor="st-wfont" hint={s.write.font === 'own' ? 'Kendi el yazın korunur; yalnızca hizalanır ve boyutlanır. İnternetsiz çalışır.' : config?.ocrEnabled ? 'Yazın tanınır ve seçtiğin yazı tipinde temiz metne dönüşür. Tanıma olmazsa kendi yazın korunur.' : 'Bu sunucuda el yazısı tanıma kapalı; kendi el yazın düzeltilerek korunur.'}>
+        <Field label="Yazı" htmlFor="st-wfont" hint={s.write.font === 'own' ? 'Kendi el yazın korunur; yalnızca hizalanır ve boyutlanır. İnternetsiz çalışır.' : config?.ocrEnabled && s.write.engine === 'auto' ? 'Yazın tanınır (önce sunucu, olmazsa cihazda) ve seçtiğin yazı tipinde temiz metne dönüşür. Emin olunamazsa kendi yazın korunur.' : 'Yazın bu cihazda, internetsiz tanınır ve seçtiğin yazı tipine dönüşür. Emin olunamazsa kendi yazın korunur.'}>
           <select id="st-wfont" className="select" value={s.write.font} onChange={e => updateSettings({write: {font: e.target.value}})}>
             <option value="own">Kendi el yazım</option>
             {allFonts().map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
         </Field>
+        {s.write.font !== 'own' && <div className="field"><label>Tanıma</label><Segmented label="Tanıma motoru" value={s.write.engine} onChange={engine => updateSettings({write: {engine}})} options={[{value: 'auto', label: 'Otomatik (sunucu + cihaz)'}, {value: 'device', label: 'Yalnızca cihazda'}]} /></div>}
         <Slider label="Yazı boyutu" value={s.write.size} min={0.6} max={1.3} step={0.05} onChange={size => updateSettings({write: {size}})} format={v => `%${Math.round(v * 100)}`} />
         <Slider label="Kalınlık" value={s.write.weight} min={1} max={9} onChange={weight => updateSettings({write: {weight}})} />
         <Slider label="Harf aralığı" value={s.write.spacing} min={-3} max={12} onChange={spacing => updateSettings({write: {spacing}})} />

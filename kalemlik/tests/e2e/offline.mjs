@@ -15,7 +15,7 @@ await page.getByRole('button', {name: 'Yeni defter'}).first().click();
 await page.fill('#nb-title', 'Yolda Notlar'); await page.getByRole('button', {name: 'Defteri oluştur'}).click();
 await page.waitForURL('**/defter/**');
 const url = page.url();
-await page.getByRole('button', {name: 'Defteri aç'}).click();
+await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();
 await page.waitForSelector('.viewport canvas');
 step('service worker kuruldu mu');
 await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated', null, {timeout: 20000});
@@ -24,7 +24,7 @@ await page.waitForFunction(() => document.querySelector('.sync-badge')?.classNam
 step('bağlantı kesildi → sayfa yeniden açılıyor');
 await context.setOffline(true);
 await page.goto(url);
-await page.getByRole('button', {name: 'Defteri aç'}).click();
+await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();
 await page.waitForSelector('.viewport canvas');
 const vp = await page.locator('.viewport').boundingBox();
 await page.mouse.move(vp.x + 400, vp.y + 300); await page.mouse.down(); await page.mouse.move(vp.x + 600, vp.y + 350, {steps: 10}); await page.mouse.up();

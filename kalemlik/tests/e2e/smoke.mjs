@@ -33,7 +33,7 @@ await shot('02-yeni-defter');
 await page.getByRole('button', {name: 'Defteri oluştur'}).click();
 await page.waitForURL('**/defter/**');
 await shot('03-kapak');
-await page.getByRole('button', {name: 'Defteri aç'}).click();
+await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();
 await page.waitForSelector('.viewport canvas');
 
 step('kalemle çiz');
@@ -93,7 +93,7 @@ assert.equal(first.strokes.filter(s => s.t === 'pen').length, 1, 'geri alınan �
 assert.equal(first.strokes.filter(s => s.t === 'shape' && s.shape === 'star').length, 1);
 assert.equal(first.texts.length, 1);
 await page.reload();
-await page.getByRole('button', {name: 'Defteri aç'}).click();
+await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();
 await page.waitForSelector('.viewport canvas');
 await shot('06-yeniden-yukleme');
 

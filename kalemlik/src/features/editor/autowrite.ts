@@ -23,7 +23,7 @@ export function looksLikeWriting(strokes: Stroke[], gap: number) {
   const b = inkBox(strokes);
   if (!b || !strokes.length) return false;
   if (!strokes.every(isWritingStroke)) return false;
-  if (strokes.length > 200) return false;
+  if (strokes.length > 400) return false;
   if (b.w < 4 && b.h < 4) return false; // tek nokta
   if (b.h > gap * 5) return false; // büyük çizim / diyagram
   if (strokes.length === 1 && b.h < gap * 0.15 && b.w > gap * 1.5) return false; // düz çizgi (altını çizme)

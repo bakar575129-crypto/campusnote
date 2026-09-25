@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   railSide: 'left',
   penOnly: false,
   zoomLock: false,
-  write: {mode: 'off', font: 'own', size: 1, weight: 5, spacing: 0, delay: 700},
+  write: {mode: 'off', font: 'own', size: 1, weight: 5, spacing: 0, delay: 700, engine: 'auto'},
   stylus: {barrel: 'eraser', tip: 'eraser'},
   text: {font: 'nunito', size: 22, color: '#1b2433'},
   focus: {work: 25, short: 5, long: 15, every: 4, autoBreak: false, sound: true},

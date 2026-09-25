@@ -1,5 +1,6 @@
 import type {Cover, Notebook, PageContent, Placed, TextBox} from '@/lib/types';
-import {loadImage} from '@/lib/files';
+import {loadImage, loadPlacedImage} from '@/lib/files';
+import {builtinUrl} from '@/features/stickers/builtin';
 import {fontStack} from '@/features/fonts/fonts';
 import {drawStroke} from './ink';
 import {paintPaper} from './paper';
@@ -57,7 +58,7 @@ export async function renderPage(content: PageContent, scale: number): Promise<H
   for (const s of content.strokes) if (s.pen !== 'highlighter') drawStroke(ctx, s);
   for (const t of content.texts) drawTextBox(ctx, t);
   for (const p of content.stickers) {
-    const img = await loadImage(p.fileId);
+    const img = await loadPlacedImage(p, builtinUrl);
     if (img) drawPlaced(ctx, p, img);
   }
   return canvas;
@@ -104,7 +105,7 @@ export async function renderCover(nb: Pick<Notebook, 'title' | 'course' | 'term'
   if (sub) ctx.fillText(sub, PAGE_W / 2, labelY + 140, PAGE_W - 360);
   if (cover.label) { ctx.fillStyle = color; ctx.font = `600 40px ${family}`; ctx.fillText(cover.label, PAGE_W / 2, PAGE_H - 140, PAGE_W - 200); }
   for (const p of cover.stickers) {
-    const img = await loadImage(p.fileId);
+    const img = await loadPlacedImage(p, builtinUrl);
     if (img) drawPlaced(ctx, p, img);
   }
   return canvas;

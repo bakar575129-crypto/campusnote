@@ -63,3 +63,12 @@ Bir çizgi (stroke) `{id, t: pen|shape|text, pen, c, w, o, pts: [x, y, basınç,
 - Dosyalar: içerik imzasına göre tür doğrulama (PNG/JPEG/WEBP/PDF/TTF/OTF/WOFF/WOFF2), tür başına boyut sınırı, kullanıcı kotası, `dist/` dışında saklama.
 - Hız sınırları: IP ve e-posta başına giriş, yükleme, OCR, şifre işlemleri (birden çok Node sürecinde tutarlı, veritabanı tabanlı) + süreç içi genel sınır.
 - Gizli anahtarlar (veritabanı, Anthropic, SMTP) yalnızca sunucudaki `.env` dosyasındadır.
+
+## 1.1.0 eklemeleri
+
+- **Geçişler:** `server/migrate.mjs` şemayı ve sürümlü geçişleri uygular; sunucu her açılışta çalıştırır (`schema_migrations`). Sürüm 2: `users.extra_storage_mb`, `users.extra_notebooks`, `users.disabled`, `users.last_login_at`, `app_settings`.
+- **Plan hesabı:** geçerli plan + yöneticinin verdiği ek depolama ve ek defter hakkı (`server/plans.mjs`).
+- **Yönetim API'si:** `/api/admin/*` (yalnızca `role = admin`) — `server/admin.mjs`.
+- **El yazısı tanıma zinciri (ön yüz):** sunucu (anahtar varsa) → cihazda Tesseract (WebAssembly, Türkçe `tur` verisi `/ocr/` altında, CSP'de yalnızca `'wasm-unsafe-eval'`) → güven eşiği altında kalırsa el yazısı korunur ve hizalanır.
+- **Sunucu tanıma:** `server/ocr.mjs` anahtarın biçiminden sağlayıcıyı seçer (Anthropic / OpenAI), yoksa model için sıradakine geçer, sağlayıcı hatasını Türkçe açıklamaya çevirir ve son hatayı yönetim paneline bildirir. Anahtar `app_settings` tablosunda (panelden) veya `.env`'de tutulur.
+- **Hazır stickerlar:** `src/features/stickers/builtin.ts` (uygulamaya gömülü SVG). Sayfada `{builtin: "kedi"}` olarak saklanır (dosya yüklemez, depolama kullanmaz). Sevimli kapak desenleri aynı çizimlerden üretilir.

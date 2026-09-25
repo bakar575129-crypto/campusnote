@@ -19,7 +19,7 @@ export const ENTITIES = {
       {key: 'trashedAt', col: 'trashed_at', type: 'nullnum'},
       {key: 'lastOpenedAt', col: 'last_opened_at', type: 'nullnum'},
     ],
-    fileRefs: d => d.cover.stickers.map(s => s.fileId),
+    fileRefs: d => d.cover.stickers.map(s => s.fileId).filter(Boolean),
   },
   page: {
     table: 'notebook_pages',
@@ -30,7 +30,7 @@ export const ENTITIES = {
     ],
     // Eşitleme listesinde sayfa içeriği gönderilmez; içerik defter açılınca ayrıca istenir.
     metaFields: ['notebookId', 'position'],
-    fileRefs: d => [...(d.content.background ? [d.content.background.fileId] : []), ...d.content.stickers.map(s => s.fileId)],
+    fileRefs: d => [...(d.content.background ? [d.content.background.fileId] : []), ...d.content.stickers.map(s => s.fileId).filter(Boolean)],
   },
   lesson: {
     table: 'lessons',

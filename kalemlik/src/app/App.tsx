@@ -12,6 +12,7 @@ import {FocusPage} from '@/features/focus/FocusPage';
 import {SettingsPage} from '@/features/account/SettingsPage';
 import {AccountPage} from '@/features/account/AccountPage';
 import {PlanPage} from '@/features/account/PlanPage';
+import {AdminPage} from '@/features/admin/AdminPage';
 import {onStoreEvent, useList} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
 import {setCustomFonts} from '@/features/fonts/fonts';
@@ -74,6 +75,7 @@ function SignedIn() {
     case '/ayarlar': page = <SettingsPage />; break;
     case '/hesap': page = <AccountPage />; break;
     case '/plan': page = <PlanPage />; break;
+    case '/yonetim': page = <AdminPage />; break;
     default: page = <NotebooksPage mode="all" />;
   }
   return <Shell><CustomFonts />{page}</Shell>;

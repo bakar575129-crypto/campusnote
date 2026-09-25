@@ -246,7 +246,16 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     return a.p + (target - a.p) * 0.3;
   };
 
+  /** Sayfanın başında/sonunda kaydırmaya devam edilirse önceki/sonraki sayfaya (ilk sayfadan kapağa) geçilir. */
+  const pulled = useRef(false);
+  const pull = (dy: number) => {
+    if (pulled.current) return;
+    if (dy > 150) { pulled.current = true; propsRef.current.onOverscroll(-1); }
+    else if (dy < -150) { pulled.current = true; propsRef.current.onOverscroll(1); }
+  };
+
   const startGesture = () => {
+    pulled.current = false;
     const pts = [...touches.current.values()];
     if (pts.length < 2) return;
     const [a, b] = pts;
@@ -292,6 +301,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
 
     if (tool === 'undo') { P.onStylusAction('undo'); return; }
     if (tool === 'hand' || !P.writable && tool !== 'select') {
+      pulled.current = false;
       action.current = {type: 'pan', id: e.pointerId, sx: e.clientX, sy: e.clientY, vx: view.current.x, vy: view.current.y};
       return;
     }
@@ -345,7 +355,10 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
         const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         const zoom = P.zoomLock ? g.v0.zoom : clamp(g.v0.zoom * (d / Math.max(1, g.d0)), MIN_ZOOM, MAX_ZOOM);
         const px = (g.mx - g.v0.x) / g.v0.zoom, py = (g.my - g.v0.y) / g.v0.zoom;
-        applyView(clampView({zoom, x: mx - px * zoom, y: my - py * zoom}), true);
+        const want = {zoom, x: mx - px * zoom, y: my - py * zoom};
+        const got = clampView(want);
+        applyView(got, true);
+        if (Math.abs(zoom - g.v0.zoom) < 0.03) pull(want.y - got.y);
         return;
       }
     }
@@ -357,7 +370,10 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     const events = 'getCoalescedEvents' in e.nativeEvent ? (e.nativeEvent as PointerEvent).getCoalescedEvents() : [];
     const list = events.length ? events : [e.nativeEvent as PointerEvent];
     if (a.type === 'pan') {
-      applyView(clampView({...view.current, x: a.vx + (e.clientX - a.sx), y: a.vy + (e.clientY - a.sy)}));
+      const want = {...view.current, x: a.vx + (e.clientX - a.sx), y: a.vy + (e.clientY - a.sy)};
+      const got = clampView(want);
+      applyView(got);
+      pull(want.y - got.y);
       return;
     }
     const {x, y} = toPage(e.clientX, e.clientY);

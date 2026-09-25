@@ -32,7 +32,7 @@ await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
 step('PDF içe aktar → defter');
 await page.locator('input[type=file][accept*="pdf"]').first().setInputFiles(pdfPath);
 await page.waitForURL('**/defter/**', {timeout: 30000, waitUntil: 'commit'});
-await page.getByRole('button', {name: 'Defteri aç'}).click();
+await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();
 await page.waitForSelector('.viewport canvas');
 assert.match(await page.locator('.page-nav-label').innerText(), /Sayfa 1 \/ 3/);
 

@@ -8,6 +8,8 @@ import {uuid} from '@/lib/ids';
 import {useFileUrl} from '@/lib/useFile';
 import type {StickerAsset} from '@/lib/types';
 import {renderSticker, type StickerEdit, type StickerShape} from './stickerImage';
+import {BUILTIN_CATEGORIES, BUILTIN_STICKERS, builtinUrl} from './builtin';
+import type {PlaceSource} from './PlacedLayer';
 
 const CORNERS: [number, number][] = [[0, 0], [1, 0], [0, 1], [1, 1]];
 
@@ -120,22 +122,37 @@ function StickerTile({s, onPick, manage}: {s: StickerAsset; onPick?: (s: Sticker
   );
 }
 
-/** Sticker arşivi: seçip sayfaya/kapağa ekleme, yeni sticker oluşturma, silme. */
-export function StickerLibrary({open, onClose, onPick}: {open: boolean; onClose: () => void; onPick: (s: StickerAsset) => void}) {
+/** Sticker seçici: uygulamayla gelen sevimli stickerlar ve kişisel arşiv (fotoğraftan oluşturulanlar). */
+export function StickerLibrary({open, onClose, onPick}: {open: boolean; onClose: () => void; onPick: (s: PlaceSource) => void}) {
   const stickers = useList('sticker').slice().sort((a, b) => b.createdAt - a.createdAt);
   const [studio, setStudio] = useState(false);
   const [manage, setManage] = useState(false);
+  const [tab, setTab] = useState<string>(BUILTIN_CATEGORIES[0]);
+  const pick = (s: PlaceSource) => { onPick(s); onClose(); };
   return (
     <>
-      <Dialog open={open && !studio} onClose={onClose} title="Sticker arşivim" size="lg"
-        footer={<>{stickers.length > 0 && <Button variant="ghost" onClick={() => setManage(!manage)}>{manage ? 'Bitti' : 'Düzenle'}</Button>}<Button variant="primary" icon={<ImagePlus size={18} />} onClick={() => setStudio(true)}>Fotoğraftan oluştur</Button></>}>
-        {stickers.length ? (
-          <div className="sticker-grid">{stickers.map(s => <StickerTile key={s.id} s={s} manage={manage} onPick={manage ? undefined : st => { onPick(st); onClose(); }} />)}</div>
+      <Dialog open={open && !studio} onClose={onClose} title="Stickerlar" size="lg"
+        footer={<>{tab === 'mine' && stickers.length > 0 && <Button variant="ghost" onClick={() => setManage(!manage)}>{manage ? 'Bitti' : 'Düzenle'}</Button>}<span className="spacer" /><Button variant="primary" icon={<ImagePlus size={18} />} onClick={() => setStudio(true)}>Fotoğraftan oluştur</Button></>}>
+        <div className="sticker-tabs" role="tablist" aria-label="Sticker grupları">
+          {BUILTIN_CATEGORIES.map(c => <button key={c} type="button" role="tab" aria-selected={tab === c} className={tab === c ? 'is-on' : ''} onClick={() => setTab(c)}>{c}</button>)}
+          <button type="button" role="tab" aria-selected={tab === 'mine'} className={tab === 'mine' ? 'is-on' : ''} onClick={() => setTab('mine')}>Arşivim{stickers.length ? ` (${stickers.length})` : ''}</button>
+        </div>
+        {tab !== 'mine' ? (
+          <div className="sticker-grid">
+            {BUILTIN_STICKERS.filter(b => b.category === tab).map(b => (
+              <div key={b.id} className="sticker-tile">
+                <button type="button" className="sticker-thumb is-builtin" onClick={() => pick({builtin: b.id, width: 120, height: 120})} aria-label={`${b.name} stickerını ekle`}><img src={builtinUrl(b.id)} alt="" /></button>
+                <span className="sticker-name">{b.name}</span>
+              </div>
+            ))}
+          </div>
+        ) : stickers.length ? (
+          <div className="sticker-grid">{stickers.map(s => <StickerTile key={s.id} s={s} manage={manage} onPick={manage ? undefined : st => pick(st)} />)}</div>
         ) : (
           <EmptyState icon={<ImagePlus size={28} />} title="Arşivin boş">Kendi fotoğraflarından sticker oluştur; hem sayfalarda hem kapakta kullanabilirsin.</EmptyState>
         )}
       </Dialog>
-      <StickerStudio open={studio} onClose={() => setStudio(false)} onCreated={s => { onPick(s); onClose(); }} />
+      <StickerStudio open={studio} onClose={() => setStudio(false)} onCreated={s => pick(s)} />
     </>
   );
 }

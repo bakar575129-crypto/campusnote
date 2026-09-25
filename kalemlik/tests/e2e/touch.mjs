@@ -28,7 +28,7 @@ await page.fill('#name', 'Dokunmatik'); await page.fill('#email', `t${Date.now()
 await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
 await page.getByRole('button', {name: 'Yeni defter'}).first().click();
 await page.fill('#nb-title', 'Tablet'); await page.getByRole('button', {name: 'Defteri oluştur'}).click();
-await page.waitForURL('**/defter/**'); await page.getByRole('button', {name: 'Defteri aç'}).click();
+await page.waitForURL('**/defter/**'); await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();
 await page.waitForSelector('.viewport canvas');
 const vp = await page.locator('.viewport').boundingBox();
 const cx = vp.x + vp.width / 2, cy = vp.y + vp.height / 2;

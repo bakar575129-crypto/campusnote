@@ -1,9 +1,17 @@
 import {readConfig} from './config.mjs';
 import {createPool} from './db.mjs';
 import {createApp} from './app.mjs';
+import {migrate} from './migrate.mjs';
 
 const config = readConfig();
 const pool = createPool(config.db);
+// Yeni sürüm yüklendiğinde veritabanı kendiliğinden güncellenir (elle "db:migrate" gerekmez).
+try {
+  const r = await migrate(pool);
+  if (r.applied.length) console.log('[Kalemlik] veritabanı güncellendi:', r.applied.join(', '));
+} catch (error) {
+  console.error('[Kalemlik] veritabanı hazırlanamadı:', error.code || error.message);
+}
 const app = createApp({pool, config});
 
 // Süresi dolan oturum, sıfırlama ve hız sınırı kayıtlarını saatte bir temizler.

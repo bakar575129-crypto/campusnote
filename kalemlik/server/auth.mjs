@@ -35,17 +35,27 @@ export function createAuth({pool, config, mailer}) {
     const now = Date.now();
     const [[row]] = await pool.execute(
       `SELECT u.*, s.last_seen FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?`, [hash, now]);
-    if (!row) {
+    if (!row || row.disabled) {
       res.clearCookie(cookieName, cookieOptions);
       throw new HttpError(401, 'Oturumun sona erdi. Tekrar giriş yap.', 'UNAUTHENTICATED');
     }
     if (now - Number(row.last_seen) > DAY) {
       await pool.execute('UPDATE sessions SET last_seen=?, expires_at=? WHERE token_hash=?', [now, now + sessionMs, hash]);
+      await pool.execute('UPDATE users SET last_login_at=? WHERE id=?', [now, row.id]);
       res.cookie(cookieName, token, {...cookieOptions, maxAge: sessionMs});
     }
     req.user = row;
     req.sessionHash = hash;
     next();
+  }
+
+  /** Tek kullanımlık şifre sıfırlama bağlantısı üretir (kullanıcının kendisi veya yönetici için). */
+  async function createResetLink(user, ttl = RESET_MS) {
+    const token = randomToken();
+    const now = Date.now();
+    await pool.execute('DELETE FROM password_resets WHERE user_id=? AND (used_at IS NOT NULL OR expires_at<?)', [user.id, now]);
+    await pool.execute('INSERT INTO password_resets (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)', [sha256(token), user.id, now + ttl, now]);
+    return `${config.origin}/sifre-sifirla?token=${encodeURIComponent(token)}`;
   }
 
   const authLimit = async (req, email) => {
@@ -82,6 +92,8 @@ export function createAuth({pool, config, mailer}) {
     await authLimit(req, body.email);
     const [[user]] = await pool.execute('SELECT * FROM users WHERE email=?', [body.email]);
     if (!(await verifyPassword(body.password, user?.password_hash))) throw new HttpError(401, 'E-posta veya şifre hatalı.', 'BAD_CREDENTIALS');
+    if (user.disabled) throw new HttpError(403, 'Bu hesap yönetici tarafından kapatıldı.', 'ACCOUNT_DISABLED');
+    await pool.execute('UPDATE users SET last_login_at=? WHERE id=?', [Date.now(), user.id]);
     await startSession(req, res, user.id);
     res.json({user: publicUser(user)});
   });
@@ -91,11 +103,7 @@ export function createAuth({pool, config, mailer}) {
     await authLimit(req, body.email);
     const [[user]] = await pool.execute('SELECT id,email,name FROM users WHERE email=?', [body.email]);
     if (user) {
-      const token = randomToken();
-      const now = Date.now();
-      await pool.execute('DELETE FROM password_resets WHERE user_id=? AND (used_at IS NOT NULL OR expires_at<?)', [user.id, now]);
-      await pool.execute('INSERT INTO password_resets (token_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)', [sha256(token), user.id, now + RESET_MS, now]);
-      const link = `${config.origin}/sifre-sifirla?token=${encodeURIComponent(token)}`;
+      const link = await createResetLink(user);
       await mailer.send({to: user.email, subject: 'Kalemlik şifre sıfırlama', text: `Merhaba ${user.name},\n\nŞifreni sıfırlamak için bu bağlantıyı 1 saat içinde aç:\n${link}\n\nBu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.`}).catch(e => console.error('Mail error:', e.message));
     }
     // Hesabın var olup olmadığı açığa çıkmasın diye yanıt her zaman aynıdır.
@@ -164,5 +172,5 @@ export function createAuth({pool, config, mailer}) {
     res.json({ok: true});
   });
 
-  return {router, requireAuth};
+  return {router, requireAuth, createResetLink};
 }

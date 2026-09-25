@@ -3,7 +3,7 @@ import type {CoverPattern, PaperId, PenId, ShapeId, TaskCategory} from './consta
 export interface Base {id: string; rev: number; createdAt: number; updatedAt: number}
 
 /** Sayfaya ya da kapağa yerleştirilmiş sticker / görsel (sayfa birimi: 1000 × 1414). */
-export interface Placed {id: string; fileId: string; x: number; y: number; w: number; h: number; rot: number}
+export interface Placed {id: string; fileId?: string; builtin?: string; x: number; y: number; w: number; h: number; rot: number}
 
 /** Yazı tipiyle "temize çekilmiş" satır: noktalar kutuyu, run metni tutar. */
 export interface TextRun {text: string; font: string; size: number; weight: number; spacing: number}
@@ -57,7 +57,7 @@ export type StylusAction = 'none' | 'eraser' | 'pen' | 'highlighter' | 'select' 
 export type WriteMode = 'off' | 'word' | 'sentence';
 
 export interface PenSetting {color: string; width: number; opacity: number}
-export interface WriteSettings {mode: WriteMode; font: string; size: number; weight: number; spacing: number; delay: number}
+export interface WriteSettings {mode: WriteMode; font: string; size: number; weight: number; spacing: number; delay: number; engine: 'auto' | 'device'}
 
 export interface UserSettings {
   theme: 'system' | 'light' | 'dark';

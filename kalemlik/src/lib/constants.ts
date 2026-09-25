@@ -11,7 +11,7 @@ export type PenId = typeof PEN_IDS[number];
 export const SHAPE_IDS = ['line', 'arrow', 'square', 'rectangle', 'circle', 'ellipse', 'triangle', 'diamond', 'hexagon', 'star'] as const;
 export type ShapeId = typeof SHAPE_IDS[number];
 
-export const COVER_PATTERNS = ['none', 'theme', 'lined', 'grid', 'dotted', 'diagonal', 'checker', 'waves', 'triangles'] as const;
+export const COVER_PATTERNS = ['none', 'theme', 'lined', 'grid', 'dotted', 'diagonal', 'checker', 'waves', 'triangles', 'paws', 'cats', 'bunnies', 'bears', 'daisies', 'tulips', 'bees', 'ladybugs', 'butterflies', 'hearts', 'stars', 'strawberries', 'clouds', 'mushrooms'] as const;
 export type CoverPattern = typeof COVER_PATTERNS[number];
 
 export const TASK_CATEGORIES = ['homework', 'exam', 'todo'] as const;

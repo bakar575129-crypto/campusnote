@@ -1,11 +1,11 @@
 import type {Notebook, Placed} from '@/lib/types';
 import {PAGE_H, PAGE_W} from '@/lib/constants';
-import {useFileUrl} from '@/lib/useFile';
+import {usePlacedUrl} from '@/lib/useFile';
 import {fontStack} from '@/features/fonts/fonts';
 import {coverPatternUrl, coverTextColor} from './cover';
 
 export function PlacedImage({p, onPointerDown, selected}: {p: Placed; onPointerDown?: (e: React.PointerEvent) => void; selected?: boolean}) {
-  const url = useFileUrl(p.fileId);
+  const url = usePlacedUrl(p);
   return (
     <div className={`placed ${selected ? 'is-selected' : ''}`} onPointerDown={onPointerDown}
       style={{left: `${(p.x / PAGE_W) * 100}%`, top: `${(p.y / PAGE_H) * 100}%`, width: `${(p.w / PAGE_W) * 100}%`, height: `${(p.h / PAGE_H) * 100}%`, transform: `rotate(${p.rot}deg)`}}>

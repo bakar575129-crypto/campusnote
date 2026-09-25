@@ -21,7 +21,9 @@ export const forgotBody = z.object({email});
 export const resetBody = z.object({token: z.string().min(20).max(200), password});
 
 // ---------------------------------------------------------------- defter sayfası içeriği
-const placed = z.object({id: shortId, fileId: uuid, x: coord, y: coord, w: z.number().min(4).max(5000), h: z.number().min(4).max(5000), rot: z.number().min(-360).max(360)});
+// Yerleştirilen görsel: kullanıcının yüklediği dosya (fileId) ya da uygulamayla gelen hazır sticker (builtin).
+const placed = z.object({id: shortId, fileId: uuid.optional(), builtin: z.string().regex(/^[a-z0-9-]{1,40}$/).optional(), x: coord, y: coord, w: z.number().min(4).max(5000), h: z.number().min(4).max(5000), rot: z.number().min(-360).max(360)})
+  .refine(p => !!p.fileId !== !!p.builtin, {message: 'Görsel kaynağı geçersiz.'});
 const run = z.object({text: z.string().min(1).max(400), font: fontId, size: z.number().min(4).max(200), weight: z.number().int().min(1).max(9), spacing: z.number().min(-10).max(40)});
 const stroke = z.object({
   id: shortId,
