@@ -43,7 +43,7 @@ export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSel
     e.stopPropagation();
     e.preventDefault();
     const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
+    try { el.setPointerCapture(e.pointerId); } catch { /* yok say */ }
     const {sx, sy, rect} = unit();
     const start = {x: e.clientX, y: e.clientY};
     const cx = rect.left + ((item.x + item.w / 2) / pageW) * rect.width, cy = rect.top + ((item.y + item.h / 2) / pageH) * rect.height;

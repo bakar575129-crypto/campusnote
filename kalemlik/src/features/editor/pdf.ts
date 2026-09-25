@@ -1,5 +1,6 @@
 // PDF içe aktarma (her PDF sayfası, üzerine yazılabilen bir defter sayfası olur) ve defteri PDF olarak dışa aktarma.
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// legacy derleme: eski iPad/Android tarayıcıları için gerekli JS özelliklerini (polyfill) içerir.
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import type {Notebook, PageContent} from '@/lib/types';
 import {saveFile} from '@/lib/files';
 import {PAGE_W} from '@/lib/constants';
@@ -16,7 +17,7 @@ function canvasBlob(canvas: HTMLCanvasElement, type = 'image/jpeg', quality = 0.
 /** PDF'in her sayfasını yüksek çözünürlüklü görüntüye çevirir ve defter sayfası içeriği üretir. */
 export async function importPdf(file: File, onProgress: (done: number, total: number) => void): Promise<PageContent[]> {
   if (file.size > MAX_PDF_MB * 1024 * 1024) throw new Error(`PDF en fazla ${MAX_PDF_MB} MB olabilir.`);
-  const pdfjs = await import('pdfjs-dist');
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   const task = pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer())});
   let doc;

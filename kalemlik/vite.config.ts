@@ -20,6 +20,8 @@ export default defineConfig({
   plugins: [react(), offlineManifest()],
   resolve: {alias: {'@': fileURLToPath(new URL('./src', import.meta.url)), '@shared': fileURLToPath(new URL('./shared', import.meta.url))}},
   define: {__APP_VERSION__: JSON.stringify(pkg.version)},
+  // Sunucunun .env dosyası (NODE_ENV vb.) ön yüz derlemesini etkilemesin.
+  envDir: 'src/env',
   server: {port: 5173, proxy: {'/api': 'http://localhost:3000'}},
   build: {outDir: 'dist', emptyOutDir: true, sourcemap: false, chunkSizeWarningLimit: 1500, assetsInlineLimit: 0},
 });

@@ -56,6 +56,8 @@ type Action =
 
 const MIN_ZOOM = 0.2, MAX_ZOOM = 6;
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+/** Bazı tarayıcılar/kalemler yakalamayı reddedebilir; çizim yine de sürer. */
+const capture = (el: Element, id: number) => { try { el.setPointerCapture(id); } catch { /* yok say */ } };
 
 export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(props, ref) {
   const vpRef = useRef<HTMLDivElement>(null);
@@ -285,7 +287,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     if (action.current) return;
     const {tool, pen} = effectiveTool(e);
     const {x, y} = toPage(e.clientX, e.clientY);
-    vpRef.current!.setPointerCapture(e.pointerId);
+    capture(vpRef.current!, e.pointerId);
     P.onInputStart();
 
     if (tool === 'undo') { P.onStylusAction('undo'); return; }
@@ -510,7 +512,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     e.stopPropagation();
     const box = selectionBox();
     if (!box) return;
-    vpRef.current!.setPointerCapture(e.pointerId);
+    capture(vpRef.current!, e.pointerId);
     action.current = {type: 'scale', id: e.pointerId, box, f: 1};
   };
 

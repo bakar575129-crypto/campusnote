@@ -64,7 +64,7 @@ function Box({t, active, interactive, selected, onActivate, onChange, onDelete, 
   const drag = (e: React.PointerEvent, mode: 'move' | 'width') => {
     e.stopPropagation(); e.preventDefault();
     const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
+    try { el.setPointerCapture(e.pointerId); } catch { /* yok say */ }
     const paper = el.closest('.paper') as HTMLElement;
     const zoom = paper.getBoundingClientRect().width / paper.offsetWidth;
     const sx = e.clientX, sy = e.clientY;
