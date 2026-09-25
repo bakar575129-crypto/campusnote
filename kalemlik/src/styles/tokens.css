@@ -1,0 +1,69 @@
+/* Kalemlik tasarım sistemi — renk, boşluk, tipografi belirteçleri */
+:root {
+  --accent: #2f6fed;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 35%, transparent);
+
+  --bg: #f4f2ed;
+  --bg-deep: #ebe7de;
+  --surface: #ffffff;
+  --surface-2: #faf8f4;
+  --surface-3: #f1eee7;
+  --line: #e4dfd4;
+  --line-strong: #d3ccbe;
+  --text: #1b2433;
+  --text-2: #4a5568;
+  --text-3: #7b8595;
+  --danger: #d23f3f;
+  --danger-soft: #fdecec;
+  --success: #1f9d6a;
+  --success-soft: #e6f6ee;
+  --warning: #c98a04;
+  --warning-soft: #fdf4dc;
+
+  --shadow-1: 0 1px 2px rgba(27, 36, 51, .06), 0 1px 1px rgba(27, 36, 51, .04);
+  --shadow-2: 0 6px 18px -6px rgba(27, 36, 51, .18), 0 2px 6px rgba(27, 36, 51, .06);
+  --shadow-3: 0 24px 60px -16px rgba(27, 36, 51, .35), 0 6px 16px rgba(27, 36, 51, .08);
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+
+  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Lora', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --sidebar-w: 248px;
+  --topbar-h: 60px;
+  --tabbar-h: 64px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --desk: #dcd7cc;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f141c;
+  --bg-deep: #0a0e14;
+  --surface: #161d28;
+  --surface-2: #1b2331;
+  --surface-3: #222c3c;
+  --line: #273244;
+  --line-strong: #34425a;
+  --text: #e8edf5;
+  --text-2: #b4bfd0;
+  --text-3: #7f8ba0;
+  --danger: #f06a6a;
+  --danger-soft: #3a1c1f;
+  --success: #3ccb8f;
+  --success-soft: #16302a;
+  --warning: #f0b53a;
+  --warning-soft: #33290f;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 8px 22px -8px rgba(0, 0, 0, .6);
+  --shadow-3: 0 30px 70px -20px rgba(0, 0, 0, .75);
+  --desk: #0b0f15;
+  color-scheme: dark;
+}
