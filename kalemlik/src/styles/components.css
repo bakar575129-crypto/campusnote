@@ -80,7 +80,8 @@
 .dialog-lg { max-width: 780px; }
 .dialog-xl { max-width: 1040px; }
 .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 6px 24px; }
-.dialog-body { padding: 12px 24px 18px; overflow: auto; }
+.dialog-body { padding: 12px 24px 18px; overflow: auto; flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
+.dialog-head, .dialog-foot { flex: none; }
 .dialog-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px 20px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 @media (max-width: 560px) {
   .overlay { place-items: end center; padding: 0; }
@@ -127,6 +128,7 @@
 .card-pad { padding: 18px 20px; }
 
 .toaster { position: fixed; z-index: 200; left: 50%; bottom: calc(20px + var(--safe-b)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; width: min(460px, calc(100vw - 24px)); pointer-events: none; }
+@media (max-width: 760px) { .toaster { bottom: calc(var(--tabbar-h) + 12px + var(--safe-b)); } }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 11px 12px 11px 14px; border-radius: var(--r); background: #1b2433; color: #f4f6fa; box-shadow: var(--shadow-3); font-weight: 600; font-size: .92rem; animation: rise .18s ease-out; }
 .toast span { flex: 1; }
 .toast-success svg:first-child { color: #57d9a3; }

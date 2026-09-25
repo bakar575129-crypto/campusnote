@@ -5,7 +5,7 @@ import {PageHeader} from '@/app/Shell';
 import {linkProps, navigate} from '@/app/router';
 import {Badge, Button, EmptyState, IconButton, Menu, Segmented} from '@/components/ui';
 import {confirmDialog, toast} from '@/components/feedback';
-import {list, loadNotebookPages, notebookPages, update, useList} from '@/lib/store';
+import {list, loadNotebookPages, notebookPages, remove, update, useList} from '@/lib/store';
 import {DAYS, minutesOf, relativeDay, timeAgo, todayIso, weekday} from '@/lib/format';
 import {CoverView} from './CoverView';
 import {NotebookDialog} from './NotebookDialog';
@@ -126,7 +126,6 @@ export function NotebooksPage({mode}: {mode: Mode}) {
     const trashed = list('notebook').filter(n => n.trashedAt !== null);
     const ok = await confirmDialog({title: 'Çöp kutusu boşaltılsın mı?', message: `${trashed.length} defter ve tüm sayfaları kalıcı olarak silinir. Bu işlem geri alınamaz.`, confirmLabel: 'Çöpü boşalt', danger: true});
     if (!ok) return;
-    const {remove} = await import('@/lib/store');
     for (const nb of trashed) { for (const p of notebookPages(nb.id)) remove('page', p.id); remove('notebook', nb.id); }
     toast('Çöp kutusu boşaltıldı.', 'success');
   };

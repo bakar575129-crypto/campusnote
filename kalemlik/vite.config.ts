@@ -9,7 +9,8 @@ function offlineManifest(): Plugin {
     name: 'kalemlik-offline-manifest',
     apply: 'build',
     generateBundle(_, bundle) {
-      const files = Object.keys(bundle).filter(f => !f.endsWith('.map') && f !== 'index.html').map(f => '/' + f);
+      // .woff (eski biçim) atlanır: modern tarayıcılar .woff2 kullanır.
+      const files = Object.keys(bundle).filter(f => !f.endsWith('.map') && !f.endsWith('.woff') && f !== 'index.html').map(f => '/' + f);
       this.emitFile({type: 'asset', fileName: 'asset-manifest.json', source: JSON.stringify({version: pkg.version, builtAt: Date.now(), files})});
     },
   };

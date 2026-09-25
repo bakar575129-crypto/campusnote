@@ -17,10 +17,11 @@
     "check": "node scripts/check-config.mjs",
     "plan:grant": "node scripts/grant-plan.mjs",
     "secret": "node -e \"console.log(require('node:crypto').randomBytes(32).toString('hex'))\"",
-    "test": "node --test tests/unit/*.test.mjs",
+    "test": "node scripts/test-unit.mjs",
     "test:api": "node --test tests/api/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "password:reset": "node scripts/reset-password.mjs"
+    "password:reset": "node scripts/reset-password.mjs",
+    "test:e2e": "node tests/e2e/smoke.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

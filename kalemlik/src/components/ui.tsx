@@ -1,10 +1,10 @@
-import {useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode} from 'react';
+import {useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {Check, X} from 'lucide-react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'soft';
 
-export function Button({variant = 'secondary', size = 'md', icon, children, className = '', busy, ...rest}: ButtonHTMLAttributes<HTMLButtonElement> & {variant?: Variant; size?: 'sm' | 'md' | 'lg'; icon?: ReactNode; busy?: boolean}) {
+export function Button({variant = 'secondary', size = 'md', icon, children, className = '', busy, ...rest}: ComponentProps<'button'> & {variant?: Variant; size?: 'sm' | 'md' | 'lg'; icon?: ReactNode; busy?: boolean}) {
   return (
     <button type="button" className={`btn btn-${variant} btn-${size} ${className}`} disabled={busy || rest.disabled} aria-busy={busy || undefined} {...rest}>
       {busy ? <span className="spinner" aria-hidden /> : icon}
@@ -13,7 +13,7 @@ export function Button({variant = 'secondary', size = 'md', icon, children, clas
   );
 }
 
-export function IconButton({label, children, active, className = '', size = 'md', ...rest}: ButtonHTMLAttributes<HTMLButtonElement> & {label: string; active?: boolean; size?: 'sm' | 'md' | 'lg'}) {
+export function IconButton({label, children, active, className = '', size = 'md', ...rest}: ComponentProps<'button'> & {label: string; active?: boolean; size?: 'sm' | 'md' | 'lg'}) {
   return (
     <button type="button" aria-label={label} title={label} aria-pressed={active ?? undefined} className={`icon-btn icon-btn-${size} ${active ? 'is-active' : ''} ${className}`} {...rest}>
       {children}

@@ -7,6 +7,8 @@
 const DB_NAME = 'kalemlik';
 const VERSION = 1;
 let dbPromise: Promise<IDBDatabase> | null = null;
+/** Açılmış veritabanı: sekme kapanırken yazma işlemi beklemeden (senkron) başlayabilsin. */
+let dbHandle: IDBDatabase | null = null;
 
 export function openDb(): Promise<IDBDatabase> {
   if (!dbPromise) {
@@ -20,7 +22,8 @@ export function openDb(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
       };
       req.onsuccess = () => {
-        req.result.onversionchange = () => req.result.close();
+        req.result.onversionchange = () => { req.result.close(); dbHandle = null; dbPromise = null; };
+        dbHandle = req.result;
         resolve(req.result);
       };
       req.onerror = () => { dbPromise = null; reject(req.error); };
@@ -60,7 +63,7 @@ export async function idbDelete(store: StoreName, key: string): Promise<void> {
 /** Birden çok yazmayı tek işlemde yapar (hızlı ve tutarlı). */
 export async function idbBatch(ops: {store: StoreName; key: string; value?: unknown; remove?: boolean}[]): Promise<void> {
   if (!ops.length) return;
-  const db = await openDb();
+  const db = dbHandle || await openDb();
   const stores = [...new Set(ops.map(o => o.store))];
   const tx = db.transaction(stores, 'readwrite');
   for (const op of ops) {

@@ -44,9 +44,13 @@ let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncing: Promise<void> | null = null;
 let syncAgain = false;
 const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const persistJobs = new Map<string, () => void>();
+/** Bekleyen cihaz yazmalarını hemen yapar (sekme kapanırken veri kaybolmasın). */
+export function flushPersist() { for (const job of [...persistJobs.values()]) job(); }
 const loadedNotebooks = new Set<string>();
 
 const rkey = (entity: EntityName, id: string) => `${userId}|${entity}|${id}`;
+const uid = () => userId as string;
 const ckey = (pageId: string) => `${userId}|${pageId}`;
 
 function emitChange(entity: EntityName) {
@@ -105,19 +109,20 @@ function persist(rec: LocalRecord, immediate = false) {
   const key = rkey(rec.entity, rec.id);
   const write = () => {
     persistTimers.delete(key);
+    persistJobs.delete(key);
     const {data, ...meta} = rec;
     const ops: Parameters<typeof idbBatch>[0] = [];
     if (rec.entity === 'page') {
       const {content, ...pageMeta} = data as Page;
-      ops.push({store: 'records', key, value: {...meta, userId, data: pageMeta} satisfies Stored});
+      ops.push({store: 'records', key, value: {...meta, userId: uid(), data: pageMeta} satisfies Stored});
       if (content) ops.push({store: 'pageContent', key: ckey(rec.id), value: content});
     } else {
-      ops.push({store: 'records', key, value: {...meta, userId, data} satisfies Stored});
+      ops.push({store: 'records', key, value: {...meta, userId: uid(), data} satisfies Stored});
     }
     idbBatch(ops).catch(() => emit({type: 'toast', kind: 'error', message: 'Cihaz depolamasına yazılamadı. Tarayıcının depolama alanı dolmuş olabilir.'}));
   };
   clearTimeout(persistTimers.get(key));
-  if (immediate) write(); else persistTimers.set(key, setTimeout(write, 250));
+  if (immediate) write(); else { persistTimers.set(key, setTimeout(write, 250)); persistJobs.set(key, write); }
 }
 
 function removeLocal(entity: EntityName, id: string) {
@@ -125,6 +130,7 @@ function removeLocal(entity: EntityName, id: string) {
   const ops: Parameters<typeof idbBatch>[0] = [{store: 'records', key: rkey(entity, id), remove: true}];
   if (entity === 'page') ops.push({store: 'pageContent', key: ckey(id), remove: true});
   clearTimeout(persistTimers.get(rkey(entity, id)));
+  persistJobs.delete(rkey(entity, id));
   idbBatch(ops).catch(() => {});
   emitChange(entity);
 }
@@ -428,6 +434,8 @@ async function pull() {
 // Bağlantı geri gelince, sekme öne gelince ve düzenli aralıklarla eşitle.
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => scheduleSync(300));
+  window.addEventListener('pagehide', flushPersist);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPersist(); });
   window.addEventListener('offline', () => setSyncState({phase: 'offline'}));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSync(300); });
   setInterval(() => { if (userId && document.visibilityState === 'visible') void syncNow(); }, 60000);

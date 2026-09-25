@@ -18,9 +18,10 @@ export async function importPdf(file: File, onProgress: (done: number, total: nu
   if (file.size > MAX_PDF_MB * 1024 * 1024) throw new Error(`PDF en fazla ${MAX_PDF_MB} MB olabilir.`);
   const pdfjs = await import('pdfjs-dist');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const task = pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer())});
   let doc;
   try {
-    doc = await pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false}).promise;
+    doc = await task.promise;
   } catch (e) {
     const name = (e as Error)?.name;
     throw new Error(name === 'PasswordException' ? 'Bu PDF parola korumalı; önce parolayı kaldırıp tekrar dene.' : 'PDF okunamadı. Dosya bozuk olabilir.');
@@ -52,7 +53,7 @@ export async function importPdf(file: File, onProgress: (done: number, total: nu
     onProgress(doc.numPages, doc.numPages);
     return pages;
   } finally {
-    await doc.destroy();
+    await task.destroy();
   }
 }
 
