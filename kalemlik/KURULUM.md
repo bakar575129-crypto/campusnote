@@ -104,6 +104,9 @@ Uygulama bir kez internetle açıldıktan sonra çevrimdışı da açılır; aç
 
 ## 10. Güncelleme
 
+Adım adım ve ekran adlarıyla: **[GUNCELLEME.md](GUNCELLEME.md)** (yalnızca değişen dosyaları içeren `kalemlik-guncelleme-X.zip` paketiyle). Kısaca:
+
+
 1. Uygulamayı cPanel'den **Stop** edin.
 2. `.env` ve `storage/` klasörünü **koruyarak** yeni paketteki dosyaları üzerine kopyalayın (`dist/`, `server/`, `sql/`, `scripts/`, `shared/`, `package*.json`, `app.js`).
 3. `npm ci --omit=dev` → **Restart**. Veritabanı güncellemeleri sunucu açılırken otomatik uygulanır (isterseniz `npm run db:migrate` ile elle de çalıştırabilirsiniz).

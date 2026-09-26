@@ -4,7 +4,7 @@
 
 > Kalemlik bağımsız, sıfırdan yazılmış bir projedir. CampusNote 1.5.0 yalnızca **özellik referansı** olarak incelendi (bkz. [docs/REFERANS-ANALIZI.md](docs/REFERANS-ANALIZI.md)); ondan kod, stil, bileşen ya da şema alınmadı ve Kalemlik'in çalışmak için CampusNote'a ihtiyacı yoktur.
 
-**Kurulum:** [KURULUM.md](KURULUM.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
+**Kurulum:** [KURULUM.md](KURULUM.md) · **Güncelleme:** [GUNCELLEME.md](GUNCELLEME.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
 
 ## 1.1.2'de yenilikler
 
