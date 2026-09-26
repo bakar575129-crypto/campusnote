@@ -36,7 +36,7 @@ export const DEFAULT_PAPER_COLOR = '#ffffff';
 export const DEFAULT_LINE_COLOR = '#c9d6e8';
 export const DEFAULT_TEXT_COLOR = '#7b8aa3';
 
-/** Kareli sayılan şablonlar: otomatik düzeltme yazıyı karelerin içine yerleştirir. */
+/** Kareli sayılan şablonlar. */
 export const CELL_PAPERS: PaperId[] = ['grid', 'grid-small', 'grid-large', 'engineering', 'coordinate', 'cornell-grid'];
 const HEADER = 90;
 
@@ -45,7 +45,7 @@ export function spacingOf(content: Pick<PageContent, 'template' | 'spacing'>) {
 }
 
 /**
- * Otomatik yazı düzeltmenin hizalanacağı ızgara: satır aralığı (gap), ilk satırın y'si (origin),
+ * Sayfanın yazı ızgarası: satır aralığı (gap), ilk satırın y'si (origin),
  * yazının başlayabileceği sol kenar ve kareli olup olmadığı.
  */
 export function writingGuide(content: Pick<PageContent, 'template' | 'spacing' | 'width' | 'height'>) {

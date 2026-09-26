@@ -1,4 +1,4 @@
-// PDF içe/dışa aktarma, sticker oluşturma, yazı tipi yükleme ve otomatik yazı düzeltme (gerçek tarayıcı).
+// PDF içe/dışa aktarma, sticker oluşturma, yazı tipi yükleme ve kendi el yazısının korunması (gerçek tarayıcı).
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
 import {PDFDocument, StandardFonts, rgb} from 'pdf-lib';
@@ -75,10 +75,7 @@ assert.equal(exported.getPageCount(), 4, 'kapak + 3 sayfa');
 const land = exported.getPage(3).getSize();
 assert.ok(land.width > land.height, 'yatay sayfa yatay kalmalı');
 
-step('otomatik yazı düzeltme (kendi el yazım)');
-await page.getByRole('button', {name: 'Otomatik yazı düzeltme'}).click();
-await page.locator('.popover').getByRole('radio', {name: 'Kelime'}).click();
-await page.keyboard.press('Escape');
+step('kendi el yazısı: güzelleştirme kapalıyken yazıya hiç dokunulmaz');
 await page.getByRole('button', {name: 'Bu sayfadan sonra yeni sayfa ekle'}).click();
 await page.waitForTimeout(300);
 await page.getByRole('button', {name: /^Tükenmez/}).click();
@@ -88,15 +85,19 @@ for (const [x0, h] of [[300, 40], [330, 55]]) {
   for (let i = 1; i <= 6; i++) await page.mouse.move(vp2.x + x0 + i * 4, vp2.y + 403 - (i % 2 ? h : 0), {steps: 2});
   await page.mouse.up();
 }
-await page.waitForTimeout(1500);
+
+await page.waitForTimeout(2500);
 await page.waitForFunction(() => document.querySelector('.sync-badge')?.className.includes('sync-idle'), null, {timeout: 15000});
 await page.waitForTimeout(1200);
 const pages = await page.evaluate(async () => (await (await fetch(`/api/notebooks/${location.pathname.split('/').pop()}/pages`)).json()).pages);
 const p2 = pages.sort((a, b) => a.position - b.position)[1].content;
 assert.equal(p2.strokes.length, 2);
+assert.ok(p2.strokes.every(s => s.t === 'pen'), 'el yazısı metne dönüşmemeli');
 const ys = p2.strokes.flatMap(s => s.pts.filter((_, i) => i % 3 === 1));
 const hgt = Math.max(...ys) - Math.min(...ys);
-assert.ok(hgt < 38 * 1.6, `düzeltilen yazı satıra sığmalı (yükseklik ${hgt})`);
+const z0 = await page.evaluate(() => { const p = document.querySelector('.paper'); return p.getBoundingClientRect().width / p.offsetWidth; });
+assert.ok(Math.abs(hgt - 55 / z0) < 3, `yazının boyutu aynen korunmalı (yükseklik ${hgt}, beklenen ${55 / z0})`);
+
 
 step('yazı tipi yükle');
 await page.goto(BASE + '/ayarlar');

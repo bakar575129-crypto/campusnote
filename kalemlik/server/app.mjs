@@ -85,6 +85,7 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
   app.post('/api/ocr', async (req, res) => {
     const image = typeof req.body?.image === 'string' ? req.body.image : '';
     const mode = req.body?.mode === 'word' ? 'word' : 'block';
+    const lang = req.body?.lang === 'en' ? 'en' : 'tr';
     const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(image);
     if (!match || match[1].length > 5_000_000) throw new HttpError(400, 'Yazı görüntüsü geçersiz veya çok büyük.');
     if (!ocr.configured) throw new HttpError(503, 'El yazısı tanıma bu sunucuda etkin değil. Yazın korunuyor.', 'OCR_DISABLED');
@@ -94,7 +95,7 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
     await pool.execute('INSERT IGNORE INTO ocr_usage (user_id,day,count) VALUES (?,?,0)', [req.user.id, day]);
     const [quota] = await pool.execute('UPDATE ocr_usage SET count=count+1 WHERE user_id=? AND day=? AND count<?', [req.user.id, day, plan.ocrDailyLimit]);
     if (!quota.affectedRows) throw new HttpError(429, 'Bugünkü el yazısı tanıma hakkın doldu. Kendi el yazın düzeltilmeye devam eder.', 'OCR_QUOTA');
-    const text = await ocr.transcribe(match[1], mode);
+    const text = await ocr.transcribe(match[1], mode, lang);
     res.json({text});
   });
 

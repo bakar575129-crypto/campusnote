@@ -2,7 +2,7 @@ import './setup';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import type {PageContent, Stroke} from '@/lib/types';
-import {correctHandwriting, inkMetrics, looksLikeWriting, replaceWithText, splitLines, splitWords} from '@/features/editor/autowrite';
+import {cleanRecognized, consistentWithInk, hoveringNear, inkMetrics, looksLikeWriting, movedAway, placeText, splitLines} from '@/features/editor/beautify';
 import {eraseFrom, inkBox, strokeInLasso, strokeInRect, transformStroke} from '@/features/editor/geometry';
 import {shapePoints} from '@/features/editor/ink';
 import {writingGuide} from '@/features/editor/paper';
@@ -30,13 +30,12 @@ test('sabitler sunucuyla aynı', () => {
   assert.equal(PAPER_IDS.length, 24);
 });
 
-test('satır ve kelime ayırma', () => {
+test('satır ayırma', () => {
   const g = 38;
   const a = [letter(100, 200, 20, 18), letter(122, 200, 20, 18), letter(200, 200, 20, 18), letter(100, 300, 20, 18)];
   const lines = splitLines(a, g);
   assert.equal(lines.length, 2);
   assert.equal(lines[0].length, 3);
-  assert.equal(splitWords(lines[0], g).length, 2, 'aradaki boşluk iki kelime ayırır');
 });
 
 test('yazı olmayan çizimlere dokunulmaz', () => {
@@ -49,71 +48,47 @@ test('yazı olmayan çizimlere dokunulmaz', () => {
   assert.equal(looksLikeWriting([letter(100, 200, 30, 20)], 38), true);
 });
 
-test('çizgili sayfada yazı satıra oturur, gereksiz küçülmez', () => {
+test('kelime bitti mi: harfin noktası/şapkası aynı kelime, sağdaki yeni kelime ve alt satır başka yer', () => {
+  const g = 38;
+  const box = inkMetrics([letter(100, 200, 80, 18)]).box; // "üniver" gibi yarım kelime
+  assert.equal(movedAway(box, 150, 175, g), false, 'ü noktası (kelimenin üstü) aynı kelime');
+  assert.equal(movedAway(box, 186, 195, g), false, 'hemen sağında devam eden harf aynı kelime');
+  assert.equal(movedAway(box, 230, 195, g), true, 'boşluk bırakıp sağda yazmak yeni kelime');
+  assert.equal(movedAway(box, 110, 250, g), true, 'alt satır');
+  assert.equal(hoveringNear(box, 190, 190, g), true, 'kalem kelimenin yanında geziniyor');
+  assert.equal(hoveringNear(box, 600, 700, g), false);
+});
+
+test('tanıma sonucu: emin olunmayan ya da tutarsız metin reddedilir, kelimeler asla değiştirilmez', () => {
+  assert.equal(cleanRecognized('[okunamadı]'), '');
+  assert.equal(cleanRecognized('mit[?]oz'), '');
+  assert.equal(cleanRecognized('  Bugün   fizik\ndersinde  '), 'Bugün fizik dersinde', 'yalnızca boşluk sadeleşir');
+  assert.equal(cleanRecognized('"mitoz"'), 'mitoz');
+  assert.equal(cleanRecognized('İstanbul’da %25 (x+1) ₺40'), 'İstanbul’da %25 (x+1) ₺40', 'Türkçe harfler ve işaretler korunur');
+  const word = [letter(100, 200, 90, 16)]; // ~6 harflik genişlik
+  assert.equal(consistentWithInk('mitoz', word), true);
+  assert.equal(consistentWithInk('Bugün fizik dersinde yeni bir konu işledik ve çok eğlendik', word), false, 'uydurma uzun metin reddedilir');
+});
+
+test('güzelleştirme: metin el yazısının yerine, aynı konuma; diğer yazı hiç kaymaz', () => {
   const c = page('lined');
   const {gap, origin} = writingGuide(c);
-  // Satırın biraz üstünde (taban 7 birim yukarıda), okunur boyutta yazı
-  const baseline = origin + gap * 5 - 7;
-  const word = [letter(120, baseline, 14, 16), letter(136, baseline, 14, 16)];
-  const out = correctHandwriting(word, word.map(s => s.id), c, {size: 1, weight: 5, spacing: 0})!;
+  const baseline = origin + gap * 2 - 5; // satırın biraz üstünde yazılmış
+  const word = [letter(120, baseline, 60, 16), letter(182, baseline, 20, 16)];
+  const other = letter(400, baseline, 40, 16);
+  const before = JSON.stringify(other);
+  const out = placeText([...word, other], word.map(s => s.id), c, 'Eylül', 'caveat')!;
   assert.ok(out);
-  const m = inkMetrics(out);
-  assert.ok(Math.abs(m.baseline - (origin + gap * 5)) < 1.5, `taban çizgisi satırda olmalı: ${m.baseline}`);
-  assert.ok(Math.abs(m.box.h - inkMetrics(word).box.h) < 0.5, 'okunur yazı küçültülmez');
-});
-
-test('büyük el yazısı satıra sığdırılır ve üst üste binmez', () => {
-  const c = page('lined');
-  const {gap, origin} = writingGuide(c);
-  const baseline = origin + gap * 8;
-  const w1 = [letter(100, baseline, 60, 90), letter(165, baseline, 60, 90)];
-  const w2 = [letter(260, baseline, 60, 90)];
-  const all = [...w1, ...w2];
-  const out = correctHandwriting(all, all.map(s => s.id), c, {size: 1, weight: 5, spacing: 0})!;
-  const b1 = inkBox(out.filter(s => w1.some(w => w.id === s.id)))!;
-  const b2 = inkBox(out.filter(s => w2.some(w => w.id === s.id)))!;
-  assert.ok(b1.h <= gap * 1.5 + 1, `yükseklik satıra sığmalı: ${b1.h}`);
-  assert.ok(b2.x >= b1.x + b1.w + 5, 'kelimeler üst üste binmemeli');
-  assert.equal(out.length, all.length, 'çizgi sayısı korunur (tek geri al adımı)');
-});
-
-test('kareli sayfada yazı karenin içine yerleşir', () => {
-  const c = page('grid');
-  const {gap} = writingGuide(c);
-  const word = [letter(200, 410, 30, 30)];
-  const out = correctHandwriting(word, word.map(s => s.id), c, {size: 1, weight: 5, spacing: 0})!;
-  const b = inkBox(out)!;
-  const row = Math.floor(b.y / gap);
-  assert.ok(b.y >= row * gap && b.y + b.h <= (row + 1) * gap + 0.5, `kare içinde olmalı: ${b.y}..${b.y + b.h}, kare ${gap}`);
-});
-
-test('sağdaki yazı itilir, sayfadan taşan kelime alt satıra geçer', () => {
-  const c = page('lined');
-  const {gap, origin} = writingGuide(c);
-  const baseline = origin + gap * 3;
-  const old = letter(300, baseline, 40, 16);
-  const fresh = [letter(100, baseline, 180, 60)]; // büyütülmüş ama sağa doğru taşan yeni kelime değil
-  const out = correctHandwriting([...fresh, old], fresh.map(s => s.id), c, {size: 1.3, weight: 5, spacing: 8})!;
-  const oldAfter = out.find(s => s.id === old.id)!;
-  const freshBox = inkBox(out.filter(s => s.id === fresh[0].id))!;
-  assert.ok(inkBox([oldAfter])!.x >= freshBox.x + freshBox.w - 0.5, 'eski yazı yeni yazının sağında kalmalı');
-
-  const nearEdge = [letter(900, baseline, 80, 20), letter(990, baseline, 5, 20)];
-  const wrapped = correctHandwriting(nearEdge, nearEdge.map(s => s.id), c, {size: 1, weight: 5, spacing: 0})!;
-  const ys = wrapped.map(s => inkMetrics([s]).baseline);
-  assert.ok(Math.max(...ys) <= c.width, 'sayfa içinde kalmalı');
-});
-
-test('yazı tipi kipi: metin satıra, el yazısı yerine', () => {
-  const c = page('lined');
-  const {gap, origin} = writingGuide(c);
-  const word = [letter(120, origin + gap * 2, 40, 16)];
-  const out = replaceWithText(word, word.map(s => s.id), c, 'merhaba', 'caveat', '#112233', {size: 1, weight: 5, spacing: 0})!;
-  assert.equal(out.length, 1);
-  assert.equal(out[0].t, 'text');
-  assert.equal(out[0].run!.text, 'merhaba');
-  assert.equal(out[0].pts[1], origin + gap * 2);
-  assert.equal(replaceWithText(word, word.map(s => s.id), c, '[okunamadı]', 'caveat', '#000000', {size: 1, weight: 5, spacing: 0}), null, 'tanınamayan yazı korunur');
+  const text = out.find(s => s.t === 'text')!;
+  assert.equal(text.run!.text, 'Eylül', 'metin aynen');
+  assert.equal(text.c, '#000000', 'kalemin rengi korunur');
+  const m = inkMetrics(word);
+  assert.equal(text.pts[0], m.box.x, 'aynı sol kenar');
+  assert.equal(text.pts[1], m.baseline, 'aynı taban çizgisi (satıra itilmez)');
+  assert.equal(JSON.stringify(out.find(s => s.id === other.id)), before, 'başka yazı değişmez');
+  assert.ok(text.pts[3] <= other.pts[0], 'sağdaki yazının üstüne binmez');
+  assert.equal(out.length, 2, 'el yazısı çizgileri kaldırılır, tek metin kalır');
+  assert.equal(placeText(word, word.map(s => s.id), c, '[okunamadı]', 'caveat'), null, 'tanınamayan yazı korunur');
 });
 
 test('kısmi silgi çizgiyi böler, şekli bütün siler', () => {
@@ -169,6 +144,12 @@ test('ayarlar eksik/eski kayıtla da güvenli', () => {
   assert.equal(s.pens.fountain.color, '#1d4ed8');
   assert.equal(s.focus.work, 25);
   assert.equal(s.write.mode, 'off');
+  // Eski otomatik düzeltme ayarları kapalı sayılır; yeni özellik yalnızca bilerek açılır.
+  const old = resolveSettings({write: {mode: 'word', font: 'own', delay: 750}} as never);
+  assert.equal(old.write.mode, 'off');
+  assert.equal(old.write.font, 'nunito');
+  assert.equal(old.write.delay, 600);
+  assert.equal(resolveSettings({write: {mode: 'beautify', font: 'caveat', delay: 1000}} as never).write.delay, 1000);
 });
 
 import {BUILTIN_STICKERS, builtinSvg} from '@/features/stickers/builtin';

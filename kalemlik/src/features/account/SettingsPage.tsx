@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from 'react';
 import {Download, Monitor, Moon, Sun, Trash2, Upload, Type} from 'lucide-react';
 import {PageHeader} from '@/app/Shell';
 import {useSession} from '@/app/session';
-import {Button, ColorPicker, Field, Segmented, Slider, Switch} from '@/components/ui';
+import {Button, ColorPicker, Field, Segmented, Switch} from '@/components/ui';
 import {confirmDialog, toast} from '@/components/feedback';
 import {useSettings, updateSettings} from '@/lib/settings';
 import {put, remove, useList, hasUnsyncedChanges, currentUserId, unloadUser} from '@/lib/store';
@@ -11,12 +11,12 @@ import {uuid} from '@/lib/ids';
 import {idbClearUser} from '@/lib/idb';
 import {PAPERS} from '@/features/editor/paper';
 import {BUILTIN_FONTS, allFonts, fontStack, inspectFontFile, ensureFont} from '@/features/fonts/fonts';
-import type {StylusAction, WriteMode} from '@/lib/types';
+import type {StylusAction} from '@/lib/types';
+import {BeautifyControls} from '@/features/editor/BeautifyControls';
 import {logout} from '@/app/session';
 
 const ACCENTS = ['#2f6fed', '#1f9d7a', '#8b5cf6', '#e0643a', '#d9467a', '#0e7490', '#1f3a5f', '#b45309'];
 export const STYLUS_LABELS: Record<StylusAction, string> = {none: 'Hiçbir şey', eraser: 'Silgi', pen: 'Kalem', highlighter: 'Fosforlu', select: 'Alan seç', hand: 'Sayfayı kaydır', undo: 'Geri al'};
-export const WRITE_MODES: {value: WriteMode; label: string}[] = [{value: 'off', label: 'Kapalı'}, {value: 'word', label: 'Kelime'}, {value: 'sentence', label: 'Cümle'}];
 
 type InstallEvent = Event & {prompt: () => Promise<void>; userChoice: Promise<{outcome: string}>};
 let deferredInstall: InstallEvent | null = null;
@@ -101,20 +101,8 @@ export function SettingsPage() {
       </section>
 
       <section className="card card-pad settings-section">
-        <h2>Otomatik yazı düzeltme</h2>
-        <p className="muted small">Kalemle yazıp kısa bir süre durduğunda yazın satıra (çizgili) veya karelerin içine (kareli) oturtulur. Yazarken hiçbir şey kaymaz; tek dokunuşla geri alınır.</p>
-        <div className="field"><label>Kip</label><Segmented label="Düzeltme kipi" value={s.write.mode} onChange={mode => updateSettings({write: {mode}})} options={WRITE_MODES} /></div>
-        <Field label="Yazı" htmlFor="st-wfont" hint={s.write.font === 'own' ? 'Kendi el yazın korunur; yalnızca hizalanır ve boyutlanır. İnternetsiz çalışır.' : config?.ocrEnabled && s.write.engine === 'auto' ? 'Yazın tanınır (önce sunucu, olmazsa cihazda) ve seçtiğin yazı tipinde temiz metne dönüşür. Emin olunamazsa kendi yazın korunur.' : 'Yazın bu cihazda, internetsiz tanınır ve seçtiğin yazı tipine dönüşür. Emin olunamazsa kendi yazın korunur.'}>
-          <select id="st-wfont" className="select" value={s.write.font} onChange={e => updateSettings({write: {font: e.target.value}})}>
-            <option value="own">Kendi el yazım</option>
-            {allFonts().map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-        </Field>
-        {s.write.font !== 'own' && <div className="field"><label>Tanıma</label><Segmented label="Tanıma motoru" value={s.write.engine} onChange={engine => updateSettings({write: {engine}})} options={[{value: 'auto', label: 'Otomatik (sunucu + cihaz)'}, {value: 'device', label: 'Yalnızca cihazda'}]} /></div>}
-        <Slider label="Yazı boyutu" value={s.write.size} min={0.6} max={1.3} step={0.05} onChange={size => updateSettings({write: {size}})} format={v => `%${Math.round(v * 100)}`} />
-        <Slider label="Kalınlık" value={s.write.weight} min={1} max={9} onChange={weight => updateSettings({write: {weight}})} />
-        <Slider label="Harf aralığı" value={s.write.spacing} min={-3} max={12} onChange={spacing => updateSettings({write: {spacing}})} />
-        <Slider label="Bekleme süresi" value={s.write.delay} min={200} max={1500} step={50} onChange={delay => updateSettings({write: {delay}})} format={v => `${(v / 1000).toLocaleString('tr', {minimumFractionDigits: 1, maximumFractionDigits: 2})} sn`} />
+        <h2>Akıllı Yazı Güzelleştirme</h2>
+        <BeautifyControls settings={s} ocrEnabled={!!config?.ocrEnabled} idPrefix="st-w" />
       </section>
 
       <section className="card card-pad settings-section">

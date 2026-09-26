@@ -54,10 +54,11 @@ export interface FontAsset extends Base {fileId: string; name: string; missingCh
 export interface SettingsRecord extends Base {data: Partial<UserSettings>}
 
 export type StylusAction = 'none' | 'eraser' | 'pen' | 'highlighter' | 'select' | 'hand' | 'undo';
-export type WriteMode = 'off' | 'word' | 'sentence';
+/** off: yalnızca kendi el yazın. beautify: Akıllı Yazı Güzelleştirme (tanınan metin seçilen yazı tipinde). */
+export type WriteMode = 'off' | 'beautify';
 
 export interface PenSetting {color: string; width: number; opacity: number}
-export interface WriteSettings {mode: WriteMode; font: string; size: number; weight: number; spacing: number; delay: number; engine: 'auto' | 'device'}
+export interface WriteSettings {mode: WriteMode; font: string; delay: number; engine: 'auto' | 'device'; lang: 'tr' | 'en'}
 
 export interface UserSettings {
   theme: 'system' | 'light' | 'dark';

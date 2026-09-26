@@ -83,10 +83,11 @@ await page.getByRole('radio', {name: 'Kediler'}).click();
 await shot('23-kapak-kediler');
 await page.getByRole('button', {name: 'Kapağı kaydet'}).click();
 
-step('cihazda el yazısı tanıma (API anahtarı yok)');
-await page.getByRole('button', {name: 'Otomatik yazı düzeltme'}).click();
-await page.locator('.popover').getByRole('radio', {name: 'Kelime'}).click();
+step('Akıllı Yazı Güzelleştirme: cihazda tanıma (API anahtarı yok), kelime bitince aynı yerde yazı tipine dönüşür');
+await page.getByRole('button', {name: 'Akıllı yazı güzelleştirme'}).click();
+await page.locator('.popover').getByRole('switch', {name: /Akıllı Yazı Güzelleştirme/}).click();
 await page.locator('#wp-font').selectOption('kalam');
+await page.locator('.popover').getByRole('radio', {name: /Normal/}).click();
 await page.keyboard.press('Escape');
 // Kalam yazı tipiyle çizilmiş harflerin iskeletini kalem çizgisi olarak "yaz": metnin görüntüsünü çizgiye çeviririz.
 const drawn = await page.evaluate(async () => {
@@ -95,7 +96,8 @@ const drawn = await page.evaluate(async () => {
   x.fillStyle = '#000'; x.font = '70px "Kalam"'; x.fillText('Merhaba', 10, 90);
   const d = x.getImageData(0, 0, 460, 120).data; const rows = [];
   for (let y = 0; y < 120; y += 3) { let start = -1; for (let xx = 0; xx <= 460; xx++) { const on = xx < 460 && d[(y * 460 + xx) * 4 + 3] > 128; if (on && start < 0) start = xx; if (!on && start >= 0) { rows.push([start, y, xx - 1]); start = -1; } } }
-  return rows;
+  // Gerçek yazıdaki gibi soldan sağa: harf harf ilerle (tarama satırları x'e göre sıralanır).
+  return rows.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 });
 await page.getByRole('button', {name: /^Tükenmez/}).click();
 console.log('  çizgi sayısı:', drawn.length);
@@ -115,6 +117,10 @@ const runs = content.strokes.filter(s => s.t === 'text');
 console.log('  tanınan:', runs.map(r => r.run.text));
 assert.equal(runs.length, 1, 'el yazısı cihazda tanınıp metne dönüşmeli');
 assert.match(runs[0].run.text, /erhaba/i);
+// Aynı yerde: metnin sol kenarı el yazısının sol kenarıyla aynı (kâğıt koordinatında)
+const paperBox = await page.locator('.paper').boundingBox();
+const inkLeft = (ox + Math.min(...drawn.map(r => r[0])) * z * 0.9 - paperBox.x) / z;
+assert.ok(Math.abs(runs[0].pts[0] - inkLeft) < 4, `metin el yazısının yerinde olmalı: ${runs[0].pts[0]} ≈ ${inkLeft}`);
 await shot('24-cihazda-tanima');
 
 assert.deepEqual(errors, []);

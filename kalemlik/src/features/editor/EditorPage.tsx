@@ -19,16 +19,15 @@ import {NotebookDialog} from '@/features/notebooks/NotebookDialog';
 import {markOpened, toggleFavorite, trashNotebook} from '@/features/notebooks/actions';
 import {StickerLibrary} from '@/features/stickers/StickerDialogs';
 import {PlacedLayer, placeSticker} from '@/features/stickers/PlacedLayer';
-import {isNotepad} from '@/features/stickers/builtin';
 import {ensureFont} from '@/features/fonts/fonts';
 import {History, type HistoryEntry, type PageSnap} from './history';
 import {PageCanvas, textHeight, type CanvasHandle} from './PageCanvas';
 import {TextLayer} from './TextLayer';
 import {TemplatePanel, ToolRail, ViewPanel, WritePanel} from './Panels';
 import {PagesPanel} from './PagesPanel';
-import {correctHandwriting, looksLikeWriting, replaceWithText, splitLines, strokesToPng} from './autowrite';
+import {cleanRecognized, consistentWithInk, hoveringNear, looksLikeWriting, movedAway, placeText, splitLines, strokesToPng} from './beautify';
 import {drawStroke} from './ink';
-import {inkBox, placedBox, strokeBox, transformStroke} from './geometry';
+import {inkBox, transformStroke} from './geometry';
 import {writingGuide} from './paper';
 import type {Selection, Tool, View} from './types';
 import {emptySelection, hasSelection} from './types';
@@ -219,24 +218,26 @@ export default function EditorPage({id}: {id: string}) {
     } catch (e) { toast(e instanceof Error ? e.message : 'PDF oluşturulamadı.', 'error'); } finally { setBusy(''); }
   };
 
-  // ------------------------------------------------------------ otomatik yazı düzeltme
+  // ------------------------------------------------------------ Akıllı Yazı Güzelleştirme
+  // Kalemle yazılan kelime bittiğinde (kalem başka yere geçti ya da bekleme süresi doldu) tanınır ve aynı yere seçilen
+  // yazı tipinde yerleştirilir. Emin olunamazsa el yazısına hiç dokunulmaz.
   const pending = useRef<{pageId: string; ids: string[]}>({pageId: '', ids: []});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const writeRef = useRef(settings.write);
   writeRef.current = settings.write;
-  useEffect(() => { if (settings.write.mode !== 'off' && settings.write.font !== 'own' && (settings.write.engine === 'device' || !config?.ocrEnabled)) warmDeviceOcr(); }, [settings.write.mode, settings.write.font, settings.write.engine, config?.ocrEnabled]);
+  useEffect(() => { if (settings.write.mode === 'beautify' && (settings.write.engine === 'device' || !config?.ocrEnabled)) warmDeviceOcr(); }, [settings.write.mode, settings.write.engine, config?.ocrEnabled]);
 
   /**
    * El yazısını metne çevirir: önce sunucu (API anahtarı tanımlıysa), olmazsa ya da başarısız olursa cihazda
    * (internetsiz). İkisi de emin değilse hata döner ve el yazısı korunur.
    */
-  const recognize = useCallback(async (strokes: Stroke[], mode: 'word' | 'block'): Promise<{text: string} | {error: string}> => {
+  const recognize = useCallback(async (strokes: Stroke[], mode: 'word' | 'block', engine: 'auto' | 'device' = 'auto', lang = 'tr'): Promise<{text: string} | {error: string}> => {
     const image = strokesToPng(strokes, (ctx, s) => drawStroke(ctx, s));
     if (!image) return {error: ''};
     let serverError = '';
-    if (writeRef.current.engine !== 'device' && config?.ocrEnabled && navigator.onLine) {
+    if (engine !== 'device' && config?.ocrEnabled && navigator.onLine) {
       try {
-        const {text} = await api<{text: string}>('/api/ocr', {method: 'POST', json: {image, mode}});
+        const {text} = await api<{text: string}>('/api/ocr', {method: 'POST', json: {image, mode, lang}});
         if (text.trim()) return {text};
       } catch (e) { serverError = e instanceof Error ? e.message.replace(/ Yazın korunuyor\.?$/, '') : ''; }
     }
@@ -251,66 +252,78 @@ export default function EditorPage({id}: {id: string}) {
   }, [config?.ocrEnabled]);
   const lastNotice = useRef(0);
 
-  const runCorrection = useCallback(async () => {
-    timer.current = null;
-    const {pageId} = pending.current;
-    let {ids} = pending.current;
+  /** Bekleyen yazının kutusu (kelime bitti mi / kalem yakında mı hesapları için). */
+  const pendingBox = () => {
+    const cur = latest(pending.current.pageId)?.content;
+    if (!cur || !pending.current.ids.length) return null;
+    const ids = new Set(pending.current.ids);
+    return {box: inkBox(cur.strokes.filter(st => ids.has(st.id))), gap: writingGuide(cur).gap};
+  };
+
+  const beautify = useCallback(async () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const {pageId, ids} = pending.current;
     pending.current = {pageId: '', ids: []};
     const w = writeRef.current;
     const cur = latest(pageId)?.content;
-    if (!cur || !ids.length || w.mode === 'off') return;
-    // Bloknot/yapışkan not üstüne yazılan yazı sayfa çizgilerine taşınmaz; olduğu yerde kalır.
-    const pads = cur.stickers.filter(p => isNotepad(p.builtin)).map(placedBox);
-    const onPad = (st: Stroke) => { const b = strokeBox(st), cx = b.x + b.w / 2, cy = b.y + b.h / 2; return pads.some(r => cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h); };
-    const idSet = new Set(ids.filter(id => { const st = cur.strokes.find(x => x.id === id); return st && !onPad(st); }));
-    if (!idSet.size) return;
-    ids = [...idSet];
-    const group = cur.strokes.filter(s => idSet.has(s.id));
+    if (!cur || !ids.length || w.mode !== 'beautify') return;
+    const idSet = new Set(ids);
+    const group = cur.strokes.filter(st => idSet.has(st.id));
     const guide = writingGuide(cur);
-    if (!looksLikeWriting(group, guide.gap)) return;
-    const opts = {size: w.size, weight: w.weight, spacing: w.spacing};
-    if (w.font === 'own') {
-      const next = correctHandwriting(cur.strokes, ids, cur, opts);
-      if (next) commit({...cur, strokes: next}, pageId);
-      return;
-    }
+    if (!group.length || !looksLikeWriting(group, guide.gap)) return;
     setDimIds(prev => new Set([...prev, ...ids]));
     const lines = splitLines(group, guide.gap);
-    const results = await Promise.all(lines.map(line => recognize(line, w.mode === 'word' ? 'word' : 'block')));
+    const results = await Promise.all(lines.map(line => recognize(line, 'word', w.engine, w.lang)));
     setDimIds(prev => { const n = new Set(prev); for (const i of ids) n.delete(i); return n; });
     const now = latest(pageId)?.content;
     if (!now) return;
     let strokes = now.strokes;
     let failed = '';
-    const fallback: string[] = [];
     lines.forEach((line, i) => {
       const r = results[i];
-      const lineIds = line.map(s => s.id).filter(x => strokes.some(s => s.id === x));
-      if (!lineIds.length) return;
-      if ('text' in r) {
-        const replaced = replaceWithText(strokes, lineIds, now, r.text, w.font, line[0].c, opts);
-        if (replaced) { strokes = replaced; return; }
-      } else if (r.error) failed = r.error;
-      fallback.push(...lineIds);
+      // Bu arada silinen/değiştirilen çizgiler dönüştürülmez.
+      const lineIds = line.map(st => st.id);
+      if (!lineIds.every(x => strokes.some(st => st.id === x))) return;
+      if (!('text' in r)) { if (r.error) failed = r.error; return; }
+      const text = cleanRecognized(r.text);
+      if (!text || !consistentWithInk(text, line)) { failed = 'Yazı güvenle okunamadı.'; return; }
+      const placed = placeText(strokes, lineIds, now, text, w.font);
+      if (placed) strokes = placed;
     });
-    if (fallback.length) { const f = correctHandwriting(strokes, fallback, now, opts); if (f) strokes = f; }
     // Her kelimede uyarı çıkmasın: en fazla dakikada bir bilgi verilir.
-    if (failed && Date.now() - lastNotice.current > 60000) { lastNotice.current = Date.now(); toast(`${failed} El yazın düzeltilerek korundu.`, 'info'); }
+    if (failed && Date.now() - lastNotice.current > 60000) { lastNotice.current = Date.now(); toast(`${failed} El yazın olduğu gibi korundu.`, 'info'); }
     if (strokes !== now.strokes) commit({...now, strokes}, pageId);
   }, [latest, commit, recognize]);
 
-  const onPenStroke = useCallback((strokeId: string) => {
-    const w = writeRef.current;
-    if (w.mode === 'off' || !page) return;
-    if (pending.current.pageId !== page.id) pending.current = {pageId: page.id, ids: []};
-    pending.current.ids.push(strokeId);
+  const restartTimer = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void runCorrection(), w.mode === 'word' ? w.delay : Math.round(w.delay * 2.5));
-  }, [page, runCorrection]);
-  const onInputStart = useCallback(() => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } }, []);
+    timer.current = setTimeout(() => void beautify(), writeRef.current.delay);
+  }, [beautify]);
+
+  const onPenStroke = useCallback((strokeId: string) => {
+    if (writeRef.current.mode !== 'beautify' || !page) return;
+    if (pending.current.pageId !== page.id) { void beautify(); pending.current = {pageId: page.id, ids: []}; }
+    pending.current.ids.push(strokeId);
+    restartTimer();
+  }, [page, beautify, restartTimer]);
+  const onInputStart = useCallback((x: number, y: number, kind: string) => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (!pending.current.ids.length) return;
+    // Kalem başka bir yere (sonraki kelime, alt satır) ya da başka bir araca geçtiyse önceki kelime bitmiştir.
+    const p = pendingBox();
+    if (kind !== 'pen' || !p?.box || movedAway(p.box, x, y, p.gap)) void beautify();
+  }, [beautify]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onPenHover = useCallback((x: number, y: number) => {
+    // Kalem kelimenin yanında havada duruyorsa kullanıcı yazmaya devam etmek üzere: süre yeniden başlar.
+    if (!timer.current) return;
+    const p = pendingBox();
+    if (p?.box && hoveringNear(p.box, x, y, p.gap)) restartTimer();
+  }, [restartTimer]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  // Sayfa değişirse bekleyen düzeltme hemen uygulanır.
-  useEffect(() => { if (timer.current) { clearTimeout(timer.current); void runCorrection(); } }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Sayfa değişirse bekleyen kelime hemen dönüştürülür.
+  useEffect(() => { if (pending.current.ids.length) void beautify(); }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Özellik kapatılırsa bekleyen iş bırakılır.
+  useEffect(() => { if (settings.write.mode !== 'beautify') { if (timer.current) clearTimeout(timer.current); timer.current = null; pending.current = {pageId: '', ids: []}; } }, [settings.write.mode]);
 
   // ------------------------------------------------------------ seçim işlemleri
   const selectedStrokes = () => content ? content.strokes.filter(s => selection.strokes.includes(s.id)) : [];
@@ -344,7 +357,7 @@ export default function EditorPage({id}: {id: string}) {
     if (!strokes.length) { toast('Metne çevirmek için el yazısı seç.', 'info'); return; }
     setBusy('El yazısı okunuyor…');
     try {
-      const r = await recognize(strokes, 'block');
+      const r = await recognize(strokes, 'block', settings.write.engine, settings.write.lang);
       if ('text' in r) setConvert({text: r.text, ids: strokes.map(s => s.id)});
       else toast(`${r.error || 'Yazı tanınamadı.'} El yazın korunuyor.`, 'error');
     } finally { setBusy(''); }
@@ -504,7 +517,7 @@ export default function EditorPage({id}: {id: string}) {
         <span className="spacer" />
         <div className="editor-top-group">
           <IconButton label="Sayfa şablonu ve renkleri" disabled={!writable} onClick={e => setPanel({kind: 'template', anchor: e.currentTarget})}><LayoutTemplate size={20} /></IconButton>
-          <IconButton label="Otomatik yazı düzeltme" active={settings.write.mode !== 'off'} onClick={e => setPanel({kind: 'write', anchor: e.currentTarget})}><Wand2 size={20} /></IconButton>
+          <IconButton label="Akıllı yazı güzelleştirme" active={settings.write.mode === 'beautify'} onClick={e => setPanel({kind: 'write', anchor: e.currentTarget})}><Wand2 size={20} /></IconButton>
           <IconButton label="Yalnızca kalem / yakınlaştırma kilidi" active={settings.penOnly || settings.zoomLock} onClick={e => setPanel({kind: 'view', anchor: e.currentTarget})}><Settings2 size={20} /></IconButton>
           <Button size="sm" variant="ghost" icon={<Layers size={18} />} onClick={() => setShowPages(!showPages)} aria-expanded={showPages}>{index === 0 ? 'Kapak' : `${index} / ${pages.length}`}</Button>
           <SyncBadge compact />
@@ -525,7 +538,7 @@ export default function EditorPage({id}: {id: string}) {
           ) : (
             <PageCanvas ref={canvas} content={content} pageId={page!.id} tool={tool} settings={settings} zoomLock={settings.zoomLock} penOnly={settings.penOnly} writable={writable}
               selection={selection} dimIds={dimIds} onSelection={setSelection}
-              onCommit={next => commit(next)} onPenStroke={onPenStroke} onInputStart={onInputStart}
+              onCommit={next => commit(next)} onPenStroke={onPenStroke} onInputStart={onInputStart} onPenHover={onPenHover}
               onStylusAction={a => { if (a === 'undo') { undo(); return true; } return false; }}
               onTap={(x, y) => { if (tool === 'text') { if (activeText) activateText(null); else createText(x, y); } }}
               onViewChange={setView}

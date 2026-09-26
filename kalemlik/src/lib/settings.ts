@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   railSide: 'left',
   penOnly: false,
   zoomLock: false,
-  write: {mode: 'off', font: 'own', size: 1, weight: 5, spacing: 0, delay: 700, engine: 'auto'},
+  write: {mode: 'off', font: 'nunito', delay: 600, engine: 'auto', lang: 'tr'},
   stylus: {barrel: 'eraser', tip: 'eraser'},
   text: {font: 'nunito', size: 22, color: '#1b2433'},
   focus: {work: 25, short: 5, long: 15, every: 4, autoBreak: false, sound: true},
@@ -32,6 +32,22 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 let cache: {raw: unknown; value: UserSettings} | null = null;
+
+/**
+ * Yazı ayarları. Eski "otomatik yazı düzeltme" (kelime/cümle, kendi el yazımı hizalama) kaldırıldı: eski kayıtlar
+ * kapalı sayılır, herkes kendi el yazısıyla başlar. Akıllı Yazı Güzelleştirme yalnızca bilerek açılırsa çalışır.
+ */
+function resolveWrite(raw: Partial<UserSettings['write']> | undefined): UserSettings['write'] {
+  const d = DEFAULT_SETTINGS.write;
+  const w = raw || {};
+  return {
+    mode: w.mode === 'beautify' ? 'beautify' : 'off',
+    font: typeof w.font === 'string' && w.font && w.font !== 'own' ? w.font : d.font,
+    delay: [300, 600, 1000].includes(w.delay as number) ? w.delay as number : d.delay,
+    engine: w.engine === 'device' ? 'device' : 'auto',
+    lang: w.lang === 'en' ? 'en' : 'tr',
+  };
+}
 
 /** Kayıtlı (eksik ya da eski) ayarları varsayılanlarla birleştirir. */
 export function resolveSettings(raw: Partial<UserSettings> | undefined): UserSettings {
@@ -43,7 +59,7 @@ export function resolveSettings(raw: Partial<UserSettings> | undefined): UserSet
     ...d, ...s,
     pens,
     eraser: {...d.eraser, ...(s.eraser || {})},
-    write: {...d.write, ...(s.write || {})},
+    write: resolveWrite(s.write),
     stylus: {...d.stylus, ...(s.stylus || {})},
     text: {...d.text, ...(s.text || {})},
     focus: {...d.focus, ...(s.focus || {})},

@@ -21,7 +21,7 @@ export function strokeBox(s: Stroke): Box {
   return {x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2};
 }
 
-/** Kalem noktalarının (kalınlık hariç) kutusu: yazı düzeltme hesapları için. */
+/** Kalem noktalarının (kalınlık hariç) kutusu: yazı güzelleştirme hesapları için. */
 export function inkBox(strokes: Stroke[]): Box | null {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const s of strokes) {

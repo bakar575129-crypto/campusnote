@@ -8,8 +8,7 @@ import {rememberColor, updatePen, updateSettings} from '@/lib/settings';
 import {PENS, SHAPES, drawStroke, penInfo} from './ink';
 import {TemplatePicker} from './TemplatePicker';
 import {DEFAULT_LINE_COLOR, DEFAULT_PAPER_COLOR, DEFAULT_TEXT_COLOR, paperInfo, spacingOf} from './paper';
-import {allFonts, fontStack} from '@/features/fonts/fonts';
-import {WRITE_MODES} from '@/features/account/SettingsPage';
+import {BeautifyControls} from './BeautifyControls';
 import type {Tool} from './types';
 
 /** Kalem rafındaki her kalem kendi biçiminde ve kendi mürekkep renginde çizilir. */
@@ -120,30 +119,7 @@ export function TemplatePanel({content, onChange, onApplyAll}: {content: PageCon
 }
 
 export function WritePanel({settings, ocrEnabled}: {settings: UserSettings; ocrEnabled: boolean}) {
-  const w = settings.write;
-  return (
-    <div className="panel stack" style={{width: 300}}>
-      <div className="field"><label>Otomatik yazı düzeltme</label><Segmented label="Kip" value={w.mode} onChange={mode => updateSettings({write: {mode}})} options={WRITE_MODES} /></div>
-      <p className="muted small">{w.mode === 'off' ? 'Yazın olduğu gibi kalır.' : w.mode === 'word' ? 'Her kelimeden sonra kısa bir duraksamada düzeltir.' : 'Cümleyi bitirip biraz durduğunda düzeltir.'} Yazarken hiçbir şey kaymaz; geri al tek adımda eski hâline döndürür.</p>
-      <Field label="Yazı" htmlFor="wp-font">
-        <select id="wp-font" className="select" value={w.font} onChange={e => updateSettings({write: {font: e.target.value}})}>
-          <option value="own">Kendi el yazım (cihazda, internetsiz)</option>
-          {allFonts().map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-        </select>
-      </Field>
-      {w.font !== 'own' && <>
-        <div className="field"><label>Tanıma</label>
-          <Segmented label="Tanıma motoru" value={w.engine} onChange={engine => updateSettings({write: {engine}})} options={[{value: 'auto', label: 'Otomatik'}, {value: 'device', label: 'Yalnızca cihazda'}]} />
-        </div>
-        <p className="muted small">{w.engine === 'device' || !ocrEnabled ? 'Yazın bu cihazda, internetsiz tanınır. En iyi sonuç için harfleri ayrık ve düzgün yaz; emin olunamazsa kendi yazın korunur.' : 'Önce sunucudaki tanıma denenir; olmazsa cihazda tanınır. Emin olunamazsa kendi yazın korunur.'}</p>
-      </>}
-      {w.font !== 'own' && <p className="write-preview" style={{fontFamily: fontStack(w.font), fontWeight: w.weight * 100, letterSpacing: w.spacing * 0.5}}>Çiğdem ağaçta şarkı söylüyor</p>}
-      <Slider label="Boyut" value={w.size} min={0.6} max={1.3} step={0.05} onChange={size => updateSettings({write: {size}})} format={v => `%${Math.round(v * 100)}`} />
-      <Slider label="Kalınlık" value={w.weight} min={1} max={9} onChange={weight => updateSettings({write: {weight}})} />
-      <Slider label="Harf aralığı" value={w.spacing} min={-3} max={12} onChange={spacing => updateSettings({write: {spacing}})} />
-      <Slider label="Bekleme" value={w.delay} min={200} max={1500} step={50} onChange={delay => updateSettings({write: {delay}})} format={v => `${(v / 1000).toFixed(2).replace('.', ',')} sn`} />
-    </div>
-  );
+  return <div className="panel" style={{width: 320}}><BeautifyControls settings={settings} ocrEnabled={ocrEnabled} idPrefix="wp" /></div>;
 }
 
 export function ViewPanel({settings}: {settings: UserSettings}) {

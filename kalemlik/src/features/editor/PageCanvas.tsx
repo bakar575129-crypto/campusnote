@@ -34,7 +34,10 @@ interface Props {
   onSelection(sel: Selection): void;
   onCommit(next: PageContent): void;
   onPenStroke(id: string): void;
-  onInputStart(): void;
+  /** Kâğıda her dokunuşta: sayfa koordinatı ve araç (kelime bitti mi anlamak için). */
+  onInputStart(x: number, y: number, tool: string): void;
+  /** Kalem kâğıda değmeden üzerinde gezinirken (destekleyen kalemlerde). */
+  onPenHover?(x: number, y: number): void;
   onStylusAction(action: StylusAction): boolean;
   onTap(x: number, y: number): void;
   onViewChange(v: View): void;
@@ -299,7 +302,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     const {tool, pen} = effectiveTool(e);
     const {x, y} = toPage(e.clientX, e.clientY);
     capture(vpRef.current!, e.pointerId);
-    P.onInputStart();
+    P.onInputStart(x, y, tool);
 
     if (tool === 'undo') { P.onStylusAction('undo'); return; }
     if (tool === 'hand' || !P.writable && tool !== 'select') {
@@ -347,7 +350,10 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
 
   const onPointerMove = (e: React.PointerEvent) => {
     const P = propsRef.current;
-    if (e.pointerType === 'pen') penSeen.current = Date.now();
+    if (e.pointerType === 'pen') {
+      penSeen.current = Date.now();
+      if (!action.current && e.buttons === 0 && P.onPenHover) { const {x, y} = toPage(e.clientX, e.clientY); P.onPenHover(x, y); }
+    }
     if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
       const r = vpRef.current!.getBoundingClientRect();
       touches.current.set(e.pointerId, {x: e.clientX - r.left, y: e.clientY - r.top});
