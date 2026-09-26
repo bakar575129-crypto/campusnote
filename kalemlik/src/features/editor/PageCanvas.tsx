@@ -40,6 +40,8 @@ interface Props {
   onViewChange(v: View): void;
   onOverscroll(dir: 1 | -1): void;
   overlay?: ReactNode;
+  /** Şablon ile mürekkep arasına çizilen katman (stickerlar, bloknotlar: üstlerine yazılabilsin). */
+  underlay?: ReactNode;
   selectionTools?: ReactNode;
 }
 
@@ -570,6 +572,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
       onContextMenu={e => e.preventDefault()}>
       <div ref={paperRef} className="paper" style={{width: W, height: H}}>
         <canvas ref={bgRef} className="layer" style={{width: W, height: H}} />
+        {props.underlay}
         <canvas ref={inkRef} className="layer" style={{width: W, height: H}} />
         {props.overlay}
         <canvas ref={liveRef} className="layer layer-live" style={{width: W, height: H}} />

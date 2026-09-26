@@ -113,7 +113,14 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
     if (res.headersSent) return next(error);
     let status = 500, message = 'Beklenmeyen bir hata oluştu. Biraz sonra tekrar dene.', code = 'SERVER_ERROR', extra;
     if (error instanceof HttpError) { status = error.status; message = error.message; code = error.code || 'ERROR'; extra = error.extra; }
-    else if (error instanceof ZodError) { status = 400; code = 'VALIDATION'; message = error.issues[0]?.message && !/^Invalid|^Too|^Expected/.test(error.issues[0].message) ? error.issues[0].message : 'Gönderilen bilgileri kontrol et.'; }
+    else if (error instanceof ZodError) {
+      status = 400; code = 'VALIDATION';
+      const issue = error.issues[0];
+      message = issue?.message && !/^Invalid|^Too|^Expected/.test(issue.message) ? issue.message : 'Gönderilen bilgileri kontrol et.';
+      // Hangi alanın reddedildiği istemciye ve sunucu günlüğüne yazılır (sorun teşhisi için).
+      extra = {field: (issue?.path || []).join('.')};
+      console.warn('[Kalemlik] doğrulama reddi:', req.method, req.path, extra.field, issue?.message);
+    }
     else if (error instanceof multer.MulterError) { status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400; code = 'UPLOAD'; message = error.code === 'LIMIT_FILE_SIZE' ? 'Dosya çok büyük.' : 'Dosya yüklenemedi.'; }
     else if (error.type === 'entity.too.large') { status = 413; code = 'TOO_LARGE'; message = 'Gönderilen içerik çok büyük.'; }
     else if (error.type === 'entity.parse.failed') { status = 400; code = 'BAD_JSON'; message = 'Gönderilen veri okunamadı.'; }

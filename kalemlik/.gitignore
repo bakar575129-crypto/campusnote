@@ -4,3 +4,4 @@ storage/
 *.log
 .DS_Store
 release/
+tsconfig.tsbuildinfo

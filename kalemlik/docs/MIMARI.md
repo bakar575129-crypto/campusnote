@@ -64,6 +64,12 @@ Bir çizgi (stroke) `{id, t: pen|shape|text, pen, c, w, o, pts: [x, y, basınç,
 - Hız sınırları: IP ve e-posta başına giriş, yükleme, OCR, şifre işlemleri (birden çok Node sürecinde tutarlı, veritabanı tabanlı) + süreç içi genel sınır.
 - Gizli anahtarlar (veritabanı, Anthropic, SMTP) yalnızca sunucudaki `.env` dosyasındadır.
 
+## 1.1.1 eklemeleri
+
+- **Gönderim öncesi temizlik:** `src/lib/sanitize.ts`, `server/schemas.mjs` ile aynı sınırları uygular (koordinat −20000…30000, NaN noktaların atılması, 30000 noktadan uzun çizgilerin bölünmesi, benzersiz çizgi kimlikleri, `hh:mm` saatleri). `store.ts` her gönderimde çalıştırır; veri değiştiyse yerel kaydı da günceller.
+- **Doğrulama hatası:** sunucu `400 VALIDATION` yanıtına `field` (ör. `content.strokes.0.pts`) ekler ve günlüğe yazar.
+- **Bloknotlar:** `builtin.ts` içinde `blok-` önekli hazır stickerlar (kendi en/boy oranlarıyla). Sayfa stickerları artık iki katmanda çizilir: görseller mürekkep tuvalinin **altında** (`PageCanvas` `underlay`), tutamaçlar ve çerçeve üstünde (`PlacedLayer mode="controls"`). PDF/küçük resim çiziminde de stickerlar mürekkepten önce çizilir.
+
 ## 1.1.0 eklemeleri
 
 - **Geçişler:** `server/migrate.mjs` şemayı ve sürümlü geçişleri uygular; sunucu her açılışta çalıştırır (`schema_migrations`). Sürüm 2: `users.extra_storage_mb`, `users.extra_notebooks`, `users.disabled`, `users.last_login_at`, `app_settings`.

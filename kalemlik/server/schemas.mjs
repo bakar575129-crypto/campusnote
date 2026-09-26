@@ -3,7 +3,9 @@ import C from '../shared/constants.json' with {type: 'json'};
 
 export const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Geçersiz kimlik.');
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-const coord = z.number().finite().min(-500).max(5000);
+// Kâğıdın dışına (uzaklaştırılmışken kenara) yazılabilir; konumlar geniş bir aralıkta kabul edilir.
+export const COORD_MIN = -20000, COORD_MAX = 30000;
+const coord = z.number().finite().min(COORD_MIN).max(COORD_MAX);
 const fontId = z.string().regex(/^[a-z0-9:-]{1,60}$/);
 const shortId = z.string().regex(/^[A-Za-z0-9_-]{1,40}$/);
 const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
@@ -22,7 +24,7 @@ export const resetBody = z.object({token: z.string().min(20).max(200), password}
 
 // ---------------------------------------------------------------- defter sayfası içeriği
 // Yerleştirilen görsel: kullanıcının yüklediği dosya (fileId) ya da uygulamayla gelen hazır sticker (builtin).
-const placed = z.object({id: shortId, fileId: uuid.optional(), builtin: z.string().regex(/^[a-z0-9-]{1,40}$/).optional(), x: coord, y: coord, w: z.number().min(4).max(5000), h: z.number().min(4).max(5000), rot: z.number().min(-360).max(360)})
+const placed = z.object({id: shortId, fileId: uuid.optional(), builtin: z.string().regex(/^[a-z0-9-]{1,40}$/).optional(), x: coord, y: coord, w: z.number().min(4).max(20000), h: z.number().min(4).max(20000), rot: z.number().min(-360).max(360)})
   .refine(p => !!p.fileId !== !!p.builtin, {message: 'Görsel kaynağı geçersiz.'});
 const run = z.object({text: z.string().min(1).max(400), font: fontId, size: z.number().min(4).max(200), weight: z.number().int().min(1).max(9), spacing: z.number().min(-10).max(40)});
 const stroke = z.object({
@@ -33,10 +35,10 @@ const stroke = z.object({
   c: hex,
   w: z.number().min(0.2).max(80),
   o: z.number().min(0.05).max(1),
-  pts: z.array(z.number().finite().min(-500).max(5000)).max(30000).refine(a => a.length % 3 === 0, 'Nokta dizisi bozuk.'),
+  pts: z.array(z.number().finite().min(COORD_MIN).max(COORD_MAX)).max(30000).refine(a => a.length % 3 === 0, 'Nokta dizisi bozuk.'),
   run: run.optional(),
 });
-const textBox = z.object({id: shortId, x: coord, y: coord, w: z.number().min(20).max(5000), text: text(20000), font: fontId, size: z.number().min(6).max(160), color: hex, bold: z.boolean().optional()});
+const textBox = z.object({id: shortId, x: coord, y: coord, w: z.number().min(20).max(20000), text: text(20000), font: fontId, size: z.number().min(6).max(160), color: hex, bold: z.boolean().optional()});
 export const pageContent = z.object({
   v: z.literal(1),
   template: z.enum(C.papers),

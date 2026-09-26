@@ -60,6 +60,7 @@ const frame = page.locator('.placed-frame');
 const before = await frame.boundingBox();
 await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
 await page.mouse.down(); await page.mouse.move(before.x + before.width / 2 + 60, before.y + before.height / 2 + 40, {steps: 6}); await page.mouse.up();
+await page.waitForTimeout(250);
 const handle = await page.locator('.placed-frame .handle-resize').boundingBox();
 await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
 await page.mouse.down(); await page.mouse.move(handle.x - 60, handle.y - 40, {steps: 6}); await page.mouse.up();

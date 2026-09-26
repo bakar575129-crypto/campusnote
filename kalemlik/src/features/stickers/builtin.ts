@@ -169,7 +169,52 @@ export const BUILTIN_STICKERS: BuiltinSticker[] = [
   {id: 'bant-cizgi', name: 'Çizgili bant', category: 'Bantlar', body: tape('#c3fae8', Array.from({length: 9}, (_, i) => `<path d="M${16 + i * 11} 40 l-8 28" stroke="#63e6be" stroke-width="4"/>`).join(''))},
 ];
 
-export const BUILTIN_CATEGORIES = [...new Set(BUILTIN_STICKERS.map(s => s.category))];
+// ---------------------------------------------------------------- bloknotlar (üstüne yazılabilen not kâğıtları)
+const EDGE = '#d8ccb8';
+const soft = (d: string, fill: string, extra = '') => `<path d="${d}" fill="#000" opacity=".13" transform="translate(3 5)"/><path d="${d}" fill="${fill}" stroke="${EDGE}" stroke-width="1.2" ${extra}/>`;
+const rectPath = (x: number, y: number, w: number, h: number, r = 4) => `M${x + r} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}H${x + r}Q${x} ${y + h} ${x} ${y + h - r}V${y + r}Q${x} ${y} ${x + r} ${y}Z`;
+const hLines = (x0: number, x1: number, y0: number, y1: number, gap: number, color: string, w = 1) => { let o = ''; for (let y = y0; y <= y1 + 0.1; y += gap) o += `M${x0} ${y.toFixed(1)}H${x1}`; return `<path d="${o}" stroke="${color}" stroke-width="${w}" fill="none"/>`; };
+const gridLines = (x: number, y: number, w: number, h: number, gap: number, color: string) => { let o = ''; for (let i = x + gap; i < x + w - 0.1; i += gap) o += `M${i.toFixed(1)} ${y}V${y + h}`; for (let j = y + gap; j < y + h - 0.1; j += gap) o += `M${x} ${j.toFixed(1)}H${x + w}`; return `<path d="${o}" stroke="${color}" stroke-width=".8" fill="none"/>`; };
+const dots = (x: number, y: number, w: number, h: number, gap: number, color: string) => { let o = ''; for (let i = x + gap; i < x + w; i += gap) for (let j = y + gap; j < y + h; j += gap) o += `<circle cx="${i.toFixed(1)}" cy="${j.toFixed(1)}" r="1.1" fill="${color}"/>`; return o; };
+const tapeStrip = (x: number, y: number, w: number, rot: number, color: string) => `<rect x="${x}" y="${y}" width="${w}" height="16" fill="${color}" opacity=".75" transform="rotate(${rot} ${x + w / 2} ${y + 8})"/>`;
+const sticky = (bg: string, band: string, curl: string, inner = '') =>
+  soft('M6 6H134V112L112 134H6Z', bg) + `<rect x="6.6" y="6.6" width="126.8" height="14" fill="${band}"/>` + inner + `<path d="M134 112L112 134L114 114Z" fill="${curl}" stroke="${EDGE}" stroke-width="1"/>`;
+const spiralTop = (x0: number, x1: number, y: number) => { let o = ''; for (let x = x0; x <= x1; x += 12) o += `<circle cx="${x}" cy="${y + 8}" r="2.6" fill="#e9e3d8" stroke="#b9ae9c" stroke-width="1"/><path d="M${x} ${y + 8} C${x - 3} ${y - 4} ${x + 3} ${y - 8} ${x + 1} ${y - 1}" fill="none" stroke="#8a8f99" stroke-width="2.2" stroke-linecap="round"/>`; return o; };
+const spiralLeft = (x: number, y0: number, y1: number) => { let o = ''; for (let y = y0; y <= y1; y += 12) o += `<circle cx="${x + 8}" cy="${y}" r="2.6" fill="#e9e3d8" stroke="#b9ae9c" stroke-width="1"/><path d="M${x + 8} ${y} C${x - 4} ${y - 3} ${x - 8} ${y + 3} ${x - 1} ${y + 1}" fill="none" stroke="#8a8f99" stroke-width="2.2" stroke-linecap="round"/>`; return o; };
+const heartPath = 'M80 142C34 112 8 86 12 52C15 26 44 12 64 30C70 35 76 42 80 48C84 42 90 35 96 30C116 12 145 26 148 52C152 86 126 112 80 142Z';
+const cloudPath = 'M40 108C18 108 8 92 14 78C4 66 12 44 32 46C34 26 58 18 72 30C82 12 112 12 120 32C136 24 158 34 156 54C174 58 176 84 162 94C164 104 154 110 144 108Z';
+const tornTop = 'M6 20L16 12L24 20L34 11L44 19L54 12L64 20L74 11L84 19L94 12L104 20L114 11L124 19L134 12L144 20L154 11L164 19L174 13V104H6Z';
+const weekdays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+const TXT = `font-family="Nunito, 'Arial Rounded MT Bold', Arial, sans-serif" font-weight="800"`;
+
+export const NOTEPADS: BuiltinSticker[] = [
+  {id: 'blok-sari', name: 'Yapışkan not (sarı)', category: 'Bloknotlar', w: 140, h: 140, body: sticky('#fff3a0', '#f7e27a', '#f0d95e')},
+  {id: 'blok-pembe', name: 'Yapışkan not (pembe, çizgili)', category: 'Bloknotlar', w: 140, h: 140, body: sticky('#ffd9e7', '#ffc2d8', '#f7b3cc', hLines(16, 124, 38, 118, 14, '#f5a8c4'))},
+  {id: 'blok-mavi', name: 'Yapışkan not (mavi, kareli)', category: 'Bloknotlar', w: 140, h: 140, body: sticky('#d6ebff', '#bcdcfb', '#a9cdf0', gridLines(7, 21, 126, 112, 10, '#b2d3f3') + `<path transform="translate(118 30) scale(.5)" d="M0 8C-10 0 -8 -10 0 -5C8 -10 10 0 0 8Z" fill="#ff8fab"/>`)},
+  {id: 'blok-yesil', name: 'Yapışkan not (yeşil)', category: 'Bloknotlar', w: 140, h: 140, body: soft('M6 12H134V134H6Z', '#dcf5cf') + hLines(16, 124, 40, 124, 14, '#b5dfa3') + tapeStrip(44, 2, 52, -4, '#ffb3c7')},
+  {id: 'blok-spiral', name: 'Spiralli bloknot', category: 'Bloknotlar', w: 140, h: 180, body: soft(rectPath(6, 14, 128, 160, 5), '#ffffff') + hLines(12, 128, 44, 164, 12, '#c9d6e8') + '<path d="M28 20V172" stroke="#f3a3a3" stroke-width="1.2"/>' + spiralTop(18, 124, 10)},
+  {id: 'blok-spiral-kareli', name: 'Spiralli kareli bloknot', category: 'Bloknotlar', w: 150, h: 180, body: soft(rectPath(12, 6, 132, 168, 5), '#fdfcf8') + gridLines(24, 12, 116, 156, 9, '#d3deec') + spiralLeft(6, 16, 166)},
+  {id: 'blok-yirtik', name: 'Yırtık defter kâğıdı', category: 'Bloknotlar', w: 180, h: 110, body: soft(tornTop, '#ffffff') + hLines(10, 170, 36, 100, 12, '#c9d6e8') + '<path d="M26 22V104" stroke="#f3a3a3" stroke-width="1.2"/>'},
+  {id: 'blok-fis', name: 'Fiş kartı', category: 'Bloknotlar', w: 180, h: 112, body: soft(rectPath(6, 6, 168, 100, 3), '#ffffff') + '<path d="M6 26H174" stroke="#f08c8c" stroke-width="1.6"/>' + hLines(6, 174, 40, 100, 12, '#b9cff0')},
+  {id: 'blok-yapilacak', name: 'Yapılacaklar listesi', category: 'Bloknotlar', w: 140, h: 190, body: soft(rectPath(6, 6, 128, 178, 8), '#ffffff') + `<path d="M6 36V14Q6 6 14 6H126Q134 6 134 14V36Z" fill="#c9b6ff"/><text x="70" y="27" text-anchor="middle" ${TXT} font-size="13" fill="#4b3a7a">Yapılacaklar</text>` +
+    Array.from({length: 9}, (_, i) => `<rect x="16" y="${46 + i * 15}" width="9" height="9" rx="2" fill="none" stroke="#b7a6e6" stroke-width="1.4"/><path d="M31 ${55 + i * 15}H124" stroke="#e1d9fb" stroke-width="1"/>`).join('')},
+  {id: 'blok-kalp', name: 'Kalp not', category: 'Bloknotlar', w: 160, h: 150, body: soft(heartPath, '#ffe0ea') + `<clipPath id="blk-kalp"><path d="${heartPath}"/></clipPath><g clip-path="url(#blk-kalp)">${hLines(0, 160, 44, 140, 12, '#f7b6cb')}</g>`},
+  {id: 'blok-bulut', name: 'Bulut not', category: 'Bloknotlar', w: 180, h: 120, body: soft(cloudPath, '#ffffff') + `<clipPath id="blk-bulut"><path d="${cloudPath}"/></clipPath><g clip-path="url(#blk-bulut)">${hLines(0, 180, 44, 104, 12, '#cfe0f5')}</g>`},
+  {id: 'blok-pano', name: 'Panolu not', category: 'Bloknotlar', w: 140, h: 190, body: soft(rectPath(6, 12, 128, 172, 10), '#c89b6d') + `<rect x="16" y="28" width="108" height="148" rx="3" fill="#ffffff"/>` + hLines(24, 116, 52, 166, 12, '#c9d6e8') +
+    `<rect x="46" y="4" width="48" height="22" rx="6" fill="#a9b1bd" stroke="#7d8591" stroke-width="1.4"/><rect x="58" y="9" width="24" height="7" rx="3.5" fill="#7d8591"/>`},
+  {id: 'blok-kraft', name: 'Kraft not', category: 'Bloknotlar', w: 150, h: 150, body: soft(rectPath(6, 8, 138, 136, 4), '#ead6b4') + dots(6, 8, 138, 136, 12, '#c9ad83') + tapeStrip(-4, 4, 48, -32, '#9ad3c8') + tapeStrip(104, 4, 48, 32, '#9ad3c8')},
+  {id: 'blok-haftalik', name: 'Haftalık mini plan', category: 'Bloknotlar', w: 150, h: 196, body: soft(rectPath(6, 6, 138, 184, 8), '#ffffff') + `<path d="M6 30V14Q6 6 14 6H136Q144 6 144 14V30Z" fill="#9fd8c9"/><text x="75" y="23" text-anchor="middle" ${TXT} font-size="12" fill="#1f5c52">Bu hafta</text>` +
+    weekdays.map((d, i) => `<text x="14" y="${48 + i * 22}" ${TXT} font-size="9" fill="#7aa99e">${d}</text><path d="M40 ${52 + i * 22}H136" stroke="#dcefe9" stroke-width="1"/>`).join('')},
+  {id: 'blok-sinav', name: 'Sınav notu kartı', category: 'Bloknotlar', w: 180, h: 124, body: soft(rectPath(6, 6, 168, 112, 10), '#ffffff') + `<path d="M6 32V16Q6 6 16 6H164Q174 6 174 16V32Z" fill="#ffb4a2"/><text x="16" y="24" ${TXT} font-size="12" fill="#7a2e1f">Sınav notu</text>` +
+    `<polygon points="${star5(160, 19, 8)}" fill="#ffe066" stroke="#e8a33b" stroke-width="1"/>` + hLines(16, 164, 48, 108, 12, '#f6d3ca')},
+  {id: 'blok-noktali', name: 'Noktalı not (ataşlı)', category: 'Bloknotlar', w: 140, h: 140, body: soft(rectPath(6, 10, 128, 124, 4), '#efe7ff') + dots(6, 10, 128, 124, 11, '#b8a7e8') +
+    `<path d="M104 2V30Q104 38 111 38Q118 38 118 30V8Q118 3 114 3Q110 3 110 8V28" fill="none" stroke="#8e9aaf" stroke-width="2.6" stroke-linecap="round"/>`},
+];
+BUILTIN_STICKERS.push(...NOTEPADS);
+export const isNotepad = (id: string | undefined) => !!id && id.startsWith('blok-');
+
+// Bloknotlar ilk sekmede: en sık kullanılacak grup.
+export const BUILTIN_CATEGORIES = ['Bloknotlar', ...new Set(BUILTIN_STICKERS.map(s => s.category).filter(c => c !== 'Bloknotlar'))];
 const byId = new Map(BUILTIN_STICKERS.map(s => [s.id, s]));
 export const findBuiltin = (id: string) => byId.get(id);
 
@@ -177,7 +222,8 @@ export const findBuiltin = (id: string) => byId.get(id);
 export function builtinSvg(id: string) {
   const s = byId.get(id);
   if (!s) return '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="240" height="240">${s.body}</svg>`;
+  const w = s.w || 120, h = s.h || 120;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w * 2}" height="${h * 2}">${s.body}</svg>`;
 }
 const urlCache = new Map<string, string>();
 export function builtinUrl(id: string) {

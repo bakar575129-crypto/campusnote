@@ -19,6 +19,7 @@ import {NotebookDialog} from '@/features/notebooks/NotebookDialog';
 import {markOpened, toggleFavorite, trashNotebook} from '@/features/notebooks/actions';
 import {StickerLibrary} from '@/features/stickers/StickerDialogs';
 import {PlacedLayer, placeSticker} from '@/features/stickers/PlacedLayer';
+import {isNotepad} from '@/features/stickers/builtin';
 import {ensureFont} from '@/features/fonts/fonts';
 import {History, type HistoryEntry, type PageSnap} from './history';
 import {PageCanvas, textHeight, type CanvasHandle} from './PageCanvas';
@@ -27,7 +28,7 @@ import {TemplatePanel, ToolRail, ViewPanel, WritePanel} from './Panels';
 import {PagesPanel} from './PagesPanel';
 import {correctHandwriting, looksLikeWriting, replaceWithText, splitLines, strokesToPng} from './autowrite';
 import {drawStroke} from './ink';
-import {inkBox, transformStroke} from './geometry';
+import {inkBox, placedBox, strokeBox, transformStroke} from './geometry';
 import {writingGuide} from './paper';
 import type {Selection, Tool, View} from './types';
 import {emptySelection, hasSelection} from './types';
@@ -252,12 +253,18 @@ export default function EditorPage({id}: {id: string}) {
 
   const runCorrection = useCallback(async () => {
     timer.current = null;
-    const {pageId, ids} = pending.current;
+    const {pageId} = pending.current;
+    let {ids} = pending.current;
     pending.current = {pageId: '', ids: []};
     const w = writeRef.current;
     const cur = latest(pageId)?.content;
     if (!cur || !ids.length || w.mode === 'off') return;
-    const idSet = new Set(ids);
+    // Bloknot/yapışkan not üstüne yazılan yazı sayfa çizgilerine taşınmaz; olduğu yerde kalır.
+    const pads = cur.stickers.filter(p => isNotepad(p.builtin)).map(placedBox);
+    const onPad = (st: Stroke) => { const b = strokeBox(st), cx = b.x + b.w / 2, cy = b.y + b.h / 2; return pads.some(r => cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h); };
+    const idSet = new Set(ids.filter(id => { const st = cur.strokes.find(x => x.id === id); return st && !onPad(st); }));
+    if (!idSet.size) return;
+    ids = [...idSet];
     const group = cur.strokes.filter(s => idSet.has(s.id));
     const guide = writingGuide(cur);
     if (!looksLikeWriting(group, guide.gap)) return;
@@ -524,8 +531,14 @@ export default function EditorPage({id}: {id: string}) {
               onViewChange={setView}
               onOverscroll={dir => setIndex(i => Math.max(0, Math.min(pages.length, i + dir)))}
               selectionTools={selectionTools}
+              underlay={
+                <PlacedLayer mode="images" items={content.stickers} pageW={content.width} pageH={content.height} selectedId={activeSticker} interactive={tool === 'select'}
+                  onSelect={setActiveSticker} onChange={updateSticker}
+                  onDuplicate={p => { const c = {...p, id: shortId(), x: p.x + 30, y: p.y + 30}; commit({...content, stickers: [...content.stickers, c]}); setActiveSticker(c.id); }}
+                  onDelete={p => { commit({...content, stickers: content.stickers.filter(s => s.id !== p.id)}); setActiveSticker(null); }}
+                  onFront={p => commit({...content, stickers: [...content.stickers.filter(s => s.id !== p.id), p]})} />}
               overlay={<>
-                <PlacedLayer items={content.stickers} pageW={content.width} pageH={content.height} selectedId={activeSticker} interactive={tool === 'select'}
+                <PlacedLayer mode="controls" items={content.stickers} pageW={content.width} pageH={content.height} selectedId={activeSticker} interactive={tool === 'select'}
                   onSelect={setActiveSticker} onChange={updateSticker}
                   onDuplicate={p => { const c = {...p, id: shortId(), x: p.x + 30, y: p.y + 30}; commit({...content, stickers: [...content.stickers, c]}); setActiveSticker(c.id); }}
                   onDelete={p => { commit({...content, stickers: content.stickers.filter(s => s.id !== p.id)}); setActiveSticker(null); }}

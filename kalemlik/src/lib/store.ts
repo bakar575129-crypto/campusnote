@@ -8,6 +8,7 @@ import {idbAllByUser, idbBatch, idbGet, idbPut} from './idb';
 import {uuid} from './ids';
 import type {EntityMap, EntityName, Page, PageContent} from './types';
 import {ENTITY_NAMES} from './types';
+import {sanitizeRecord} from './sanitize';
 import {pendingUploadIds, setFilesUser, uploadPending} from './files';
 
 export interface LocalRecord<E extends EntityName = EntityName> {
@@ -285,11 +286,18 @@ async function runSync() {
 }
 
 function pushBody(rec: LocalRecord) {
-  const {id: _i, rev: _r, createdAt: _c, updatedAt: _u, ...data} = rec.data as unknown as Record<string, unknown>;
-  void _i; void _r; void _c; void _u;
   if (rec.entity === 'settings') return {rev: rec.rev, data: {data: (rec.data as EntityMap['settings']).data}};
+  const {id: _i, rev: _r, createdAt: _c, updatedAt: _u, ...raw} = rec.data as unknown as Record<string, unknown>;
+  void _i; void _r; void _c; void _u;
+  // Sunucu kurallarına uydurulur; düzeltilen değer yerelde de saklanır (çakışma karşılaştırması tutarlı kalsın).
+  const data = sanitizeRecord(rec.entity, raw);
+  if (JSON.stringify(data) !== JSON.stringify(raw)) {
+    rec.data = {...rec.data, ...data} as EntityMap[EntityName];
+    persist(rec, true);
+  }
   return {rev: rec.rev, data};
 }
+const reported = new Set<string>();
 
 async function pushRecord(rec: LocalRecord) {
   const url = rec.entity === 'settings' ? '/api/sync/settings/me' : `/api/sync/${rec.entity}/${rec.id}`;
@@ -337,7 +345,12 @@ async function handlePushError(rec: LocalRecord, error: ApiError) {
   }
   if (error.code === 'MISSING_FILE' || error.code === 'MISSING_PARENT') { rec.error = error.message; return; }
   rec.error = error.message;
-  if (error.status === 413 || error.status === 400) {
+  const field = typeof error.body.field === 'string' ? error.body.field : '';
+  if (field) console.warn('[Kalemlik] sunucu kaydı reddetti:', rec.entity, rec.id, field, error.message);
+  // Aynı kayıt için uyarı bir kez gösterilir (her yeniden denemede tekrar çıkmaz).
+  const key = `${rec.entity}:${rec.id}:${error.code}`;
+  if ((error.status === 413 || error.status === 400) && !reported.has(key)) {
+    reported.add(key);
     emit({type: 'toast', kind: 'error', message: `Kaydedilemedi: ${error.message} (Değişikliğin bu cihazda korunuyor.)`});
   }
 }

@@ -2,6 +2,7 @@ import {useRef} from 'react';
 import {Copy, RotateCcw, RotateCw, Trash2, ArrowUpToLine} from 'lucide-react';
 import type {Placed} from '@/lib/types';
 import {usePlacedUrl} from '@/lib/useFile';
+import {isNotepad} from './builtin';
 
 interface Props {
   items: Placed[];
@@ -9,6 +10,8 @@ interface Props {
   pageH: number;
   selectedId: string | null;
   interactive: boolean;
+  /** images: yalnızca görseller (mürekkebin altında), controls: yalnızca tutma alanları ve çerçeve (en üstte). */
+  mode?: 'all' | 'images' | 'controls';
   onSelect: (id: string | null) => void;
   /** Sürükleme sırasında canlı; commit=true bırakınca (geri al adımı). */
   onChange: (item: Placed, commit: boolean) => void;
@@ -17,8 +20,8 @@ interface Props {
   onFront: (item: Placed) => void;
 }
 
-function Item({p, pageW, pageH}: {p: Placed; pageW: number; pageH: number}) {
-  const url = usePlacedUrl(p);
+function Item({p, pageW, pageH, ghost}: {p: Placed; pageW: number; pageH: number; ghost?: boolean}) {
+  const url = usePlacedUrl(ghost ? {} : p);
   return (
     <div className="placed" data-id={p.id} style={{left: `${(p.x / pageW) * 100}%`, top: `${(p.y / pageH) * 100}%`, width: `${(p.w / pageW) * 100}%`, height: `${(p.h / pageH) * 100}%`, transform: `rotate(${p.rot}deg)`}}>
       {url && <img src={url} alt="" draggable={false} />}
@@ -30,7 +33,7 @@ function Item({p, pageW, pageH}: {p: Placed; pageW: number; pageH: number}) {
  * Sayfadaki / kapaktaki stickerlar: taşı, köşeden büyüt/küçült (oran korunur), üstteki tutamaçla döndür,
  * çoğalt, sil. Kalem, dokunma ve fareyle çalışır.
  */
-export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSelect, onChange, onDuplicate, onDelete, onFront}: Props) {
+export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSelect, onChange, onDuplicate, onDelete, onFront, mode = 'all'}: Props) {
   const root = useRef<HTMLDivElement>(null);
   const selected = items.find(i => i.id === selectedId) || null;
 
@@ -76,7 +79,7 @@ export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSel
   };
 
   return (
-    <div ref={root} className={`placed-layer ${interactive ? 'is-interactive' : ''}`}
+    <div ref={root} className={`placed-layer placed-${mode} ${interactive && mode !== 'images' ? 'is-interactive' : ''}`}
       onPointerDown={e => {
         if (!interactive) return;
         const target = (e.target as HTMLElement).closest<HTMLElement>('.placed');
@@ -84,8 +87,8 @@ export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSel
         if (item) { onSelect(item.id); startDrag(e, item, 'move'); }
         else if (!(e.target as HTMLElement).closest('.placed-frame')) onSelect(null);
       }}>
-      {items.map(p => <Item key={p.id} p={p} pageW={pageW} pageH={pageH} />)}
-      {interactive && selected && (
+      {items.map(p => <Item key={p.id} p={p} pageW={pageW} pageH={pageH} ghost={mode === 'controls'} />)}
+      {mode !== 'images' && interactive && selected && (
         <div className="placed-frame" style={{left: `${(selected.x / pageW) * 100}%`, top: `${(selected.y / pageH) * 100}%`, width: `${(selected.w / pageW) * 100}%`, height: `${(selected.h / pageH) * 100}%`, transform: `rotate(${selected.rot}deg)`}}>
           <div className="placed-move" onPointerDown={e => startDrag(e, selected, 'move')} />
           <button type="button" className="handle handle-rotate" aria-label="Döndür (sürükle)" onPointerDown={e => startDrag(e, selected, 'rotate')} />
@@ -106,6 +109,7 @@ export function PlacedLayer({items, pageW, pageH, selectedId, interactive, onSel
 /** Yeni stickerı alanın ortasına, uygun boyutta yerleştirir. */
 export interface PlaceSource {fileId?: string; builtin?: string; width: number; height: number}
 export function placeSticker(s: PlaceSource, pageW: number, pageH: number, id: string, widthRatio = 0.3): Placed {
-  const w = Math.min(pageW * widthRatio, s.builtin ? 220 : 600), h = w * (s.height / s.width);
+  // Bloknotlar üstüne yazılacağı için daha büyük yerleşir.
+  const w = isNotepad(s.builtin) ? Math.min(pageW * 0.42, 440) : Math.min(pageW * widthRatio, s.builtin ? 220 : 600), h = w * (s.height / s.width);
   return {id, ...(s.builtin ? {builtin: s.builtin} : {fileId: s.fileId}), x: pageW / 2 - w / 2, y: pageH / 2 - h / 2, w, h, rot: 0};
 }

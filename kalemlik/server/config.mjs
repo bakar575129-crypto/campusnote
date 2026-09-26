@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 export const ROOT = fileURLToPath(new URL('../', import.meta.url));
-export const VERSION = '1.1.0';
+export const VERSION = '1.1.1';
 dotenv.config({path: path.join(ROOT, '.env'), quiet: true});
 
 function int(env, key, fallback, min, max) {

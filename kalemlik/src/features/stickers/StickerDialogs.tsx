@@ -141,7 +141,7 @@ export function StickerLibrary({open, onClose, onPick}: {open: boolean; onClose:
           <div className="sticker-grid">
             {BUILTIN_STICKERS.filter(b => b.category === tab).map(b => (
               <div key={b.id} className="sticker-tile">
-                <button type="button" className="sticker-thumb is-builtin" onClick={() => pick({builtin: b.id, width: 120, height: 120})} aria-label={`${b.name} stickerını ekle`}><img src={builtinUrl(b.id)} alt="" /></button>
+                <button type="button" className={`sticker-thumb is-builtin ${b.category === 'Bloknotlar' ? 'is-pad' : ''}`} onClick={() => pick({builtin: b.id, width: b.w || 120, height: b.h || 120})} aria-label={`${b.name} stickerını ekle`}><img src={builtinUrl(b.id)} alt="" /></button>
                 <span className="sticker-name">{b.name}</span>
               </div>
             ))}

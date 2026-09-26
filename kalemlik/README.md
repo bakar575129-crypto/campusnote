@@ -6,6 +6,11 @@
 
 **Kurulum:** [KURULUM.md](KURULUM.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
 
+## 1.1.1'de yenilikler
+
+- **"Kaydedilemedi: Gönderilen bilgileri kontrol et" hatası giderildi.** Neden: uzaklaştırılmış görünümde kâğıdın dışına taşan çizgiler ve seçimi sayfanın çok dışına taşımak, sunucunun koordinat sınırını aşıyordu; sayfa bu yüzden hiç kaydedilemiyordu. Sınırlar genişletildi ve uygulama artık her kaydı göndermeden önce sunucu kurallarına uydurur (geçersiz noktaları onarır, çok uzun çizgileri böler, saatleri düzeltir). Daha önce takılıp kalmış kayıtlar da kendiliğinden onarılıp gönderilir. Bir alan yine de reddedilirse sunucu hangi alan olduğunu bildirir ve uyarı bir kez gösterilir.
+- **16 bloknot çeşidi** (Stickerlar → **Bloknotlar**): sarı/pembe/mavi/yeşil yapışkan notlar, spiralli (çizgili ve kareli) bloknot, yırtık defter kâğıdı, fiş kartı, yapılacaklar listesi, kalp, bulut, panolu not, kraft not, haftalık mini plan, sınav notu kartı, noktalı (ataşlı) not. Sayfanın her yerine konur, taşınır, boyutlandırılır, döndürülür ve **üstüne kalemle yazılır** (mürekkep bloknotun üstünde görünür; PDF'te de). Otomatik yazı düzeltme bloknot üstündeki yazıya dokunmaz.
+
 ## 1.1.0'da yenilikler
 
 - **API'siz el yazısı tanıma:** yazı tipi kipinde el yazısı artık **cihazda** (internetsiz, ücretsiz; Türkçe dil verisiyle) tanınır. API anahtarı varsa önce sunucu denenir, olmazsa cihaz; ikisi de emin değilse el yazısı korunur.
@@ -99,9 +104,9 @@ kalemlik/
 
 ## Testler
 
-- 22 birim testi (sticker/desen SVG geçerliliği ve OCR sağlayıcı mantığı dahil): otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
+- 24 birim testi (sticker/desen SVG geçerliliği ve OCR sağlayıcı mantığı dahil): otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
 - 9 API testi (MariaDB; yönetim paneli ve hazır sticker şeması dahil): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, silme izi, defter sınırı ve plan, dosya yükleme/imza/kota/temizlik, doğrulama, şifre değiştirme/sıfırlama, OCR.
-- 6 tarayıcı testi (`tests/e2e`): genel akış, PDF/sticker/yazı tipi/otomatik düzeltme, dokunmatik (yalnızca kalem, sıkıştırma, kilit, avuç içi), çevrimdışı PWA, 1.1 özellikleri (kaydırarak geçiş, hazır sticker, galeri görseli, sevimli kapak, cihazda tanıma), yönetim paneli.
+- 7 tarayıcı testi (`tests/e2e`): genel akış, PDF/sticker/yazı tipi/otomatik düzeltme, dokunmatik (yalnızca kalem, sıkıştırma, kilit, avuç içi), çevrimdışı PWA, 1.1 özellikleri (kaydırarak geçiş, hazır sticker, galeri görseli, sevimli kapak, cihazda tanıma), bloknotlar (üstüne yazma, kâğıt dışı çizginin hatasız kaydı), yönetim paneli.
 
 ## Bilinen sınırlar
 

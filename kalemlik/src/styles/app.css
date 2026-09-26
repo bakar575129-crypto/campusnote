@@ -328,3 +328,5 @@ button.admin-row:hover { background: var(--surface-2); }
 .admin-block h3 { display: flex; align-items: center; gap: 8px; }
 .reset-link { background: var(--surface-2); border-radius: var(--r); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .reset-link .input { flex: 1; font-family: var(--font-mono); font-size: .78rem; }
+.sticker-thumb.is-pad img { filter: drop-shadow(0 2px 3px rgba(0,0,0,.08)); }
+.placed-controls .placed { background: transparent; }

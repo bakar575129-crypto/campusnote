@@ -54,13 +54,14 @@ export async function renderPage(content: PageContent, scale: number): Promise<H
     const img = await loadImage(content.background.fileId);
     if (img) drawImageContain(ctx, img, content.width, content.height);
   }
-  for (const s of content.strokes) if (s.pen === 'highlighter') drawStroke(ctx, s);
-  for (const s of content.strokes) if (s.pen !== 'highlighter') drawStroke(ctx, s);
-  for (const t of content.texts) drawTextBox(ctx, t);
+  // Stickerlar ve bloknotlar mürekkebin altında: üstlerine yazılan yazı görünür (ekrandaki sırayla aynı).
   for (const p of content.stickers) {
     const img = await loadPlacedImage(p, builtinUrl);
     if (img) drawPlaced(ctx, p, img);
   }
+  for (const s of content.strokes) if (s.pen === 'highlighter') drawStroke(ctx, s);
+  for (const s of content.strokes) if (s.pen !== 'highlighter') drawStroke(ctx, s);
+  for (const t of content.texts) drawTextBox(ctx, t);
   return canvas;
 }
 

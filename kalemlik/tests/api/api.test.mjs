@@ -114,13 +114,18 @@ test('defter + sayfa eşitleme, çakışma, silme izi', async () => {
   // Bozuk nokta dizisi reddedilir
   r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [{...stroke, pts: [1, 2]}]})});
   assert.equal(r.status, 400);
-  // Eski revizyonla yazma → 409 + sunucudaki güncel kayıt
-  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: []})});
+  assert.equal(r.body.field, 'content.strokes.0.pts');
+  // Kâğıdın çok dışına taşan çizgi ve üstüne yazılan bloknot kabul edilir
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [{...stroke, pts: [-4000, 12000, 0.5, 900, 900, 0.5]}], stickers: [{id: 'n1', builtin: 'blok-sari', x: -300, y: 1200, w: 420, h: 420, rot: -5}]})});
+  assert.equal(r.status, 200);
   assert.equal(r.body.rev, 2);
-  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [stroke, stroke]})});
+  // Eski revizyonla yazma → 409 + sunucudaki güncel kayıt
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page(nb, {strokes: []})});
+  assert.equal(r.body.rev, 3);
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page(nb, {strokes: [stroke, stroke]})});
   assert.equal(r.status, 409);
   assert.equal(r.body.code, 'CONFLICT');
-  assert.equal(r.body.current.rev, 2);
+  assert.equal(r.body.current.rev, 3);
 
   r = await c('GET', `/api/notebooks/${nb}/pages`);
   assert.equal(r.body.pages.length, 1);
