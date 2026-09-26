@@ -7,6 +7,7 @@ const browser = await chromium.launch();
 const context = await browser.newContext({viewport: {width: 1280, height: 860}});
 const page = await context.newPage();
 const errors = [];
+page.on('response', r => { if (r.url().includes('/api/sync/') && r.status() === 400) errors.push('eşitleme reddi: ' + r.url()); });
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
 const step = s => console.log('•', s);
@@ -82,6 +83,43 @@ if (await page.locator('.cover-stage').count()) await page.getByRole('button', {
 await page.waitForSelector('.placed-images .placed img');
 await page.waitForTimeout(500);
 await shot('32-bloknot-yenile');
+
+step('eski sürümden kalmış bozuk, takılı kayıtlar açılışta onarılıp kaydedilir');
+const pageId = first.id;
+await page.evaluate(async pageId => {
+  const db = await new Promise((res, rej) => { const r = indexedDB.open('kalemlik'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  const tx = (store, mode = 'readonly') => db.transaction(store, mode).objectStore(store);
+  const keys = await new Promise(res => { const r = tx('records').getAllKeys(); r.onsuccess = () => res(r.result); });
+  const key = keys.find(k => k.endsWith('|page|' + pageId));
+  const uid = key.split('|')[0];
+  const rec = await new Promise(res => { const r = tx('records').get(key); r.onsuccess = () => res(r.result); });
+  const content = await new Promise(res => { const r = tx('pageContent').get(uid + '|' + pageId); r.onsuccess = () => res(r.result); });
+  content.strokes.push(
+    {id: 'bozuk 1', t: 'pen', pen: 'ballpoint', c: 'black', w: 0, o: 0, pts: [-90000, 50000, 7, NaN, 3, 0.5, 20, 20, 0.5, 30]},
+    {id: 'bozuk 1', t: 'text', c: '#000', w: 2, o: 1, pts: [10, 10, 1, 60, 10, 1], run: {text: 'x'.repeat(900), font: 'Kalam Bold', size: 999, weight: 4.6, spacing: 99}},
+  );
+  content.texts.push({id: 'm', x: NaN, y: 10, w: 2, text: 'not', font: 'nunito', size: 22, color: 'mavi'});
+  content.stickers[0].rot = 1234.5;
+  content.spacing = 500;
+  const task = {entity: 'task', id: crypto.randomUUID(), rev: 0, dirty: true, deleted: false, version: 1, userId: uid,
+    data: {title: '   ', course: '', description: '', dueDate: '', dueTime: '25:00', category: 'yok', color: 'red', done: false, completedAt: null, createdAt: Date.now(), updatedAt: Date.now(), rev: 0}};
+  task.data.id = task.id;
+  const w = db.transaction(['records', 'pageContent'], 'readwrite');
+  w.objectStore('records').put({...rec, dirty: true, version: rec.version + 5}, key);
+  w.objectStore('pageContent').put(content, uid + '|' + pageId);
+  w.objectStore('records').put(task, `${uid}|task|${task.id}`);
+  await new Promise(res => { w.oncomplete = res; });
+}, pageId);
+await page.reload();
+await page.waitForSelector('.viewport canvas, .cover-stage');
+await synced();
+assert.equal(await page.locator('.toast', {hasText: 'Kaydedilemedi'}).count(), 0, 'kaydetme hatası olmamalı');
+const [repaired] = await pagesOf();
+assert.ok(repaired.content.strokes.some(s => s.run && s.run.text.length === 400), 'bozuk kayıt onarılıp sunucuya ulaşmalı');
+assert.equal(new Set(repaired.content.strokes.map(s => s.id)).size, repaired.content.strokes.length);
+const tasks = await page.evaluate(async () => (await (await fetch('/api/sync?since=0')).json()).records.task);
+assert.equal(tasks.length, 1, 'bozuk görev de kaydedilmeli');
+assert.equal(tasks[0].category, 'todo');
 
 assert.deepEqual(errors, []);
 console.log('✓ Bloknot testleri geçti');

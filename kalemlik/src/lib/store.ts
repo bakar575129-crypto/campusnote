@@ -344,16 +344,40 @@ async function handlePushError(rec: LocalRecord, error: ApiError) {
     return;
   }
   if (error.code === 'MISSING_FILE' || error.code === 'MISSING_PARENT') { rec.error = error.message; return; }
-  rec.error = error.message;
   const field = typeof error.body.field === 'string' ? error.body.field : '';
   if (field) console.warn('[Kalemlik] sunucu kaydı reddetti:', rec.entity, rec.id, field, error.message);
+  // Son çare: sayfadaki tek bir öğe (çizgi, metin, sticker) hâlâ reddediliyorsa yalnızca o öğe çıkarılır ve sayfa
+  // yeniden gönderilir; sayfanın geri kalanı kaydedilir.
+  const item = /^content\.(strokes|texts|stickers)\.(\d+)/.exec(field);
+  if (error.code === 'VALIDATION' && rec.entity === 'page' && item && (dropped.get(rec.id) || 0) < 50) {
+    const page = rec.data as Page;
+    const list = page.content?.[item[1] as 'strokes' | 'texts' | 'stickers'] as unknown[] | undefined;
+    if (page.content && list && Number(item[2]) < list.length) {
+      dropped.set(rec.id, (dropped.get(rec.id) || 0) + 1);
+      rec.data = {...page, content: {...page.content, [item[1]]: list.filter((_, i) => i !== Number(item[2]))}};
+      rec.version++;
+      persist(rec, true);
+      emitChange('page');
+      scheduleSync(300);
+      return;
+    }
+  }
+  rec.error = error.message;
   // Aynı kayıt için uyarı bir kez gösterilir (her yeniden denemede tekrar çıkmaz).
   const key = `${rec.entity}:${rec.id}:${error.code}`;
   if ((error.status === 413 || error.status === 400) && !reported.has(key)) {
     reported.add(key);
-    emit({type: 'toast', kind: 'error', message: `Kaydedilemedi: ${error.message} (Değişikliğin bu cihazda korunuyor.)`});
+    let hint = '';
+    if (error.code === 'VALIDATION') {
+      // Sunucu eski sürümdeyse (dosyalar yüklendi ama uygulama yeniden başlatılmadı) bunu açıkça söyle.
+      const server = await api<{version: string}>('/api/config').then(c => c.version).catch(() => '');
+      if (server && server !== __APP_VERSION__) hint = ` Sunucu eski sürümde çalışıyor (${server}, uygulama ${__APP_VERSION__}): cPanel'de Node.js uygulamasını yeniden başlat.`;
+      else if (field) hint = ` [${rec.entity}: ${field}]`;
+    }
+    emit({type: 'toast', kind: 'error', message: `Kaydedilemedi: ${error.message}${hint} (Değişikliğin bu cihazda korunuyor.)`});
   }
 }
+const dropped = new Map<string, number>();
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const strip = (d: object) => { const {rev: _r, updatedAt: _u, createdAt: _c, ...rest} = d as Record<string, unknown>; void _r; void _u; void _c; return rest; };

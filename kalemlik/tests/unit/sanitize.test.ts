@@ -36,3 +36,48 @@ test('saat, başlık ve ders kaydı onarılır', () => {
   assert.equal(task.dueTime, '09:05');
   assert.equal(entitySchemas.task.safeParse(task).success, true);
 });
+
+// ---- rastgele bozuk veri: onarımdan sonra sunucu şeması HER ZAMAN kabul etmeli
+let seed = 12345;
+const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+const pick = <T,>(list: T[]): T => list[Math.floor(rnd() * list.length)];
+const junk = (): unknown => pick<() => unknown>([
+  () => undefined, () => null, () => NaN, () => Infinity, () => -1e12, () => 1e12, () => rnd() * 100, () => -rnd() * 5,
+  () => '', () => '   ', () => 'x'.repeat(30000), () => '12', () => '#abc', () => '#GGGGGG', () => 'kırmızı', () => '25:99', () => '7:5',
+  () => '2026-02-30', () => '2026-9-7', () => true, () => false, () => [], () => ({}), () => [1, 'a', null], () => 'ÇĞİÖŞÜ çğıöşü',
+])();
+const maybe = (good: unknown) => (rnd() < 0.5 ? good : junk());
+const uuidv = '0b5f8a2e-6c1d-4f7e-9a3b-2d4c6e8f0a1b';
+const junkPlaced = () => ({id: maybe('p' + Math.floor(rnd() * 1e6)), fileId: rnd() < 0.3 ? uuidv : junk(), builtin: rnd() < 0.5 ? 'kedi' : junk(), x: maybe(100), y: maybe(100), w: maybe(50), h: maybe(50), rot: maybe(10)});
+const junkStroke = () => ({id: maybe('s'), t: maybe('pen'), pen: maybe('ballpoint'), shape: maybe('star'), c: maybe('#000000'), w: maybe(2), o: maybe(1),
+  pts: rnd() < 0.2 ? junk() : Array.from({length: Math.floor(rnd() * 40)}, () => maybe(rnd() * 1000)), run: rnd() < 0.3 ? {text: maybe('merhaba'), font: maybe('kalam'), size: maybe(20), weight: maybe(4), spacing: maybe(0)} : junk()});
+const junkContent = () => ({v: maybe(1), template: maybe('lined'), width: maybe(1000), height: maybe(1414), paperColor: junk(), lineColor: maybe('#aabbcc'), textColor: junk(), spacing: junk(),
+  background: rnd() < 0.3 ? {fileId: maybe(uuidv), kind: maybe('pdf')} : junk(),
+  strokes: rnd() < 0.1 ? junk() : Array.from({length: Math.floor(rnd() * 12)}, () => (rnd() < 0.1 ? junk() : junkStroke())),
+  texts: Array.from({length: Math.floor(rnd() * 4)}, () => ({id: maybe('t'), x: maybe(1), y: maybe(1), w: maybe(200), text: maybe('yazı'), font: maybe('nunito'), size: maybe(20), color: maybe('#000000'), bold: junk()})),
+  stickers: Array.from({length: Math.floor(rnd() * 4)}, junkPlaced)});
+const junkRecord: Record<string, () => Record<string, unknown>> = {
+  page: () => ({notebookId: uuidv, position: maybe(1), content: junkContent()}),
+  notebook: () => ({title: maybe('Fizik'), course: maybe(''), term: maybe(''), color: maybe('#2f6fed'), paper: maybe('lined'), favorite: junk(), trashedAt: junk(), lastOpenedAt: junk(),
+    cover: rnd() < 0.2 ? junk() : {pattern: maybe('cats'), patternColor: junk(), patternOpacity: maybe(0.2), patternSize: maybe(6), textColor: junk(), font: junk(), showCourse: junk(), showTerm: junk(), label: maybe('not'), stickers: Array.from({length: Math.floor(rnd() * 3)}, junkPlaced)}}),
+  lesson: () => ({title: maybe('Matematik'), day: maybe(2), start: maybe('09:00'), end: maybe('10:00'), room: junk(), instructor: junk(), color: junk(), note: junk()}),
+  task: () => ({title: maybe('Ödev'), course: junk(), description: junk(), dueDate: maybe('2026-10-01'), dueTime: maybe('09:00'), category: maybe('exam'), color: junk(), done: junk(), completedAt: junk()}),
+  focus: () => ({topic: junk(), course: junk(), plannedMinutes: maybe(25), focusedSeconds: maybe(100), completed: junk(), startedAt: maybe(Date.now()), endedAt: junk()}),
+  sticker: () => ({fileId: uuidv, name: junk(), width: junk(), height: junk()}),
+  font: () => ({fileId: uuidv, name: junk(), missingChars: junk()}),
+  settings: () => ({data: rnd() < 0.5 ? {theme: 'dark'} : junk()}),
+};
+
+test('rastgele bozuk kayıtlar onarıldıktan sonra sunucu şemasından her zaman geçer', () => {
+  for (const [entity, make] of Object.entries(junkRecord)) {
+    const schema = entitySchemas[entity as keyof typeof entitySchemas];
+    for (let i = 0; i < 400; i++) {
+      const raw = JSON.parse(JSON.stringify(make())); // ağdan gelen hâli (NaN → null, undefined düşer)
+      const fixed = sanitizeRecord(entity as never, raw);
+      const r = schema.safeParse(fixed);
+      if (!r.success) assert.fail(`${entity} #${i}: ${r.error.issues[0].path.join('.')} ${r.error.issues[0].message}\n${JSON.stringify(raw).slice(0, 400)}`);
+      // Onarım kararlı olmalı: onarılmış veriyi tekrar onarmak değiştirmez (gereksiz yeniden gönderim olmaz).
+      assert.deepEqual(sanitizeRecord(entity as never, JSON.parse(JSON.stringify(fixed))), fixed);
+    }
+  }
+});

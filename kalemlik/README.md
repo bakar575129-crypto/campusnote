@@ -6,6 +6,13 @@
 
 **Kurulum:** [KURULUM.md](KURULUM.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
 
+## 1.1.2'de yenilikler
+
+- **"Kaydedilemedi" hatası kökten giderildi.** Onarım artık **sunucuda** da yapılır: sunucu her kaydı doğrulamadan önce ortak onarıcıdan (`shared/repair.mjs`) geçirir. Böylece hangi uygulama sürümünden, hangi cihazdan ya da ne kadar eski bir yerel kopyadan gelirse gelsin kayıt reddedilmez: sınır dışı konumlar sınıra çekilir, bozuk noktalar atlanır, geçersiz renk/yazı tipi/saat/tarih/kategori düzeltilir, eksik alanlar varsayılanla doldurulur, aynı kimlikli öğeler ayrılır. Önceki sürümde onarılmayan alanlar (ör. tarihi boş görev, bilinmeyen kategori, bozuk sayfa sırası, eksik revizyon) da artık kapsanıyor.
+- Sunucu yine de bir sayfa öğesini reddederse yalnızca o öğe atlanır, sayfanın geri kalanı kaydedilir.
+- Sunucu dosyaları güncellendi ama Node.js uygulaması yeniden başlatılmadıysa uyarı bunu açıkça söyler; açık kalmış eski uygulama, sunucu güncellenince kendini yeniler (yerel değişiklikler korunur).
+- Testler: 8 kayıt türü × 400 rastgele bozuk kayıt → onarım sonrası hepsi sunucu şemasından geçer; cihazda takılı kalmış bozuk kayıtların açılışta onarılıp kaydedildiği tarayıcı testi; tüm tarayıcı testleri artık tek bir eşitleme reddinde başarısız olur.
+
 ## 1.1.1'de yenilikler
 
 - **"Kaydedilemedi: Gönderilen bilgileri kontrol et" hatası giderildi.** Neden: uzaklaştırılmış görünümde kâğıdın dışına taşan çizgiler ve seçimi sayfanın çok dışına taşımak, sunucunun koordinat sınırını aşıyordu; sayfa bu yüzden hiç kaydedilemiyordu. Sınırlar genişletildi ve uygulama artık her kaydı göndermeden önce sunucu kurallarına uydurur (geçersiz noktaları onarır, çok uzun çizgileri böler, saatleri düzeltir). Daha önce takılıp kalmış kayıtlar da kendiliğinden onarılıp gönderilir. Bir alan yine de reddedilirse sunucu hangi alan olduğunu bildirir ve uyarı bir kez gösterilir.
@@ -104,7 +111,7 @@ kalemlik/
 
 ## Testler
 
-- 24 birim testi (sticker/desen SVG geçerliliği ve OCR sağlayıcı mantığı dahil): otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
+- 25 birim testi (rastgele bozuk kayıt onarımı, sticker/desen SVG geçerliliği ve OCR sağlayıcı mantığı dahil): otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
 - 9 API testi (MariaDB; yönetim paneli ve hazır sticker şeması dahil): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, silme izi, defter sınırı ve plan, dosya yükleme/imza/kota/temizlik, doğrulama, şifre değiştirme/sıfırlama, OCR.
 - 7 tarayıcı testi (`tests/e2e`): genel akış, PDF/sticker/yazı tipi/otomatik düzeltme, dokunmatik (yalnızca kalem, sıkıştırma, kilit, avuç içi), çevrimdışı PWA, 1.1 özellikleri (kaydırarak geçiş, hazır sticker, galeri görseli, sevimli kapak, cihazda tanıma), bloknotlar (üstüne yazma, kâğıt dışı çizginin hatasız kaydı), yönetim paneli.
 

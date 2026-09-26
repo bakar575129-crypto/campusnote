@@ -6,6 +6,8 @@ const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const browser = await chromium.launch();
 const context = await browser.newContext({viewport: {width: 1024, height: 768}, hasTouch: true, isMobile: false});
 const page = await context.newPage();
+const rejected = [];
+page.on('response', r => { if (r.url().includes('/api/sync/') && r.status() === 400) rejected.push(r.url()); });
 const cdp = await context.newCDPSession(page);
 const step = s => console.log('•', s);
 const touch = async (type, points) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints: points.map(([x, y], id) => ({x, y, id, radiusX: 4, radiusY: 4, force: 0.5}))});
@@ -86,5 +88,6 @@ await page.keyboard.press('Escape');
 await drag([[[cx - 100, cy + 150], [cx + 50, cy + 170]]]);
 assert.equal(await strokes(), 2, 'kalemin hemen ardından gelen dokunuş (avuç) çizmemeli');
 
+assert.deepEqual(rejected, [], 'eşitleme reddi olmamalı');
 console.log('✓ Dokunmatik testleri geçti');
 await browser.close();

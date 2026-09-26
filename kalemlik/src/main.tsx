@@ -47,3 +47,25 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 // Tarayıcının depolamayı kendiliğinden silmemesini iste (çevrimdışı taslaklar için).
 void navigator.storage?.persist?.().catch(() => false);
+
+// Sunucu yeni sürüme geçtiyse (ör. cPanel'de güncelleme yapıldı) açık kalmış eski uygulama, kullanıcı uygulamaya
+// geri döndüğünde kendini yeniler. Yerel değişiklikler önce IndexedDB'ye yazılır; hiçbir şey kaybolmaz.
+if (import.meta.env.PROD) {
+  let checking = false;
+  const checkVersion = async () => {
+    if (checking || document.visibilityState !== 'visible' || !navigator.onLine) return;
+    checking = true;
+    try {
+      const res = await fetch('/api/config', {cache: 'no-store', credentials: 'same-origin'});
+      const {version} = res.ok ? await res.json() as {version?: string} : {version: undefined};
+      if (version && version !== __APP_VERSION__ && sessionStorage.getItem('klm-reloaded') !== version) {
+        sessionStorage.setItem('klm-reloaded', version);
+        const {flushPersist} = await import('./lib/store');
+        flushPersist();
+        setTimeout(() => location.reload(), 400);
+      }
+    } catch { /* çevrimdışı */ } finally { checking = false; }
+  };
+  document.addEventListener('visibilitychange', () => { void checkVersion(); });
+  window.addEventListener('load', () => { void checkVersion(); });
+}

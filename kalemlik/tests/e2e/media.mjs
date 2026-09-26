@@ -21,6 +21,7 @@ const browser = await chromium.launch();
 const context = await browser.newContext({viewport: {width: 1280, height: 860}, acceptDownloads: true});
 const page = await context.newPage();
 const errors = [];
+page.on('response', r => { if (r.url().includes('/api/sync/') && r.status() === 400) errors.push('eşitleme reddi: ' + r.url()); });
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
 const step = s => console.log('•', s);

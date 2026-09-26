@@ -6,6 +6,8 @@ const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const browser = await chromium.launch();
 const context = await browser.newContext({viewport: {width: 1200, height: 800}});
 const page = await context.newPage();
+const rejected = [];
+page.on('response', r => { if (r.url().includes('/api/sync/') && r.status() === 400) rejected.push(r.url()); });
 const step = s => console.log('•', s);
 
 await page.goto(BASE + '/kayit');
@@ -37,5 +39,6 @@ await page.evaluate(() => window.dispatchEvent(new Event('online')));
 await page.waitForFunction(() => document.querySelector('.sync-badge')?.className.includes('sync-idle'), null, {timeout: 20000});
 const pages = await page.evaluate(async () => (await (await fetch(`/api/notebooks/${location.pathname.split('/').pop()}/pages`)).json()).pages);
 assert.equal(pages[0].content.strokes.length, 1, 'çevrimdışı yazılan çizgi sunucuya ulaşmalı');
+assert.deepEqual(rejected, [], 'eşitleme reddi olmamalı');
 console.log('✓ Çevrimdışı testi geçti');
 await browser.close();

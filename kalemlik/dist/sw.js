@@ -1,6 +1,6 @@
 // Kalemlik service worker — çevrimdışı uygulama kabuğu.
 // API ve kullanıcı dosyaları burada önbelleğe alınmaz (onlar IndexedDB'de, kullanıcıya özel saklanır).
-const VERSION = 'kalemlik-v3';
+const VERSION = 'kalemlik-v4';
 const SHELL = `${VERSION}-shell`;
 
 self.addEventListener('install', event => {

@@ -64,6 +64,13 @@ Bir çizgi (stroke) `{id, t: pen|shape|text, pen, c, w, o, pts: [x, y, basınç,
 - Hız sınırları: IP ve e-posta başına giriş, yükleme, OCR, şifre işlemleri (birden çok Node sürecinde tutarlı, veritabanı tabanlı) + süreç içi genel sınır.
 - Gizli anahtarlar (veritabanı, Anthropic, SMTP) yalnızca sunucudaki `.env` dosyasındadır.
 
+## 1.1.2 eklemeleri
+
+- **Ortak onarıcı:** `shared/repair.mjs` (türleri `shared/repair.d.mts`). Sunucu `server/sync.mjs` içinde her kaydı `repairRecord` → Zod şeması sırasıyla işler; istemci `src/lib/sanitize.ts` üzerinden aynı fonksiyonu göndermeden önce çalıştırır. Koordinat sınırları (`LIMITS`) şemayla paylaşılır. İçeriği olmayan sayfa boş sayfaya çevrilmez (sunucudaki içeriği silmesin diye reddedilir).
+- **Eksik revizyon** 0 sayılır → kayıt sunucuda varsa 409 çakışma, istemci güncel kaydı alır.
+- **İstemci son çaresi:** `400 VALIDATION` yanıtındaki `field` bir sayfa öğesini gösteriyorsa (`content.strokes.N` …) o öğe çıkarılıp sayfa yeniden gönderilir.
+- **Sürüm uyumu:** uyarıda sunucu/uygulama sürümü farklıysa yeniden başlatma önerilir; `main.tsx` görünürlük değişiminde `/api/config` sürümünü kontrol edip gerekirse sayfayı yeniler.
+
 ## 1.1.1 eklemeleri
 
 - **Gönderim öncesi temizlik:** `src/lib/sanitize.ts`, `server/schemas.mjs` ile aynı sınırları uygular (koordinat −20000…30000, NaN noktaların atılması, 30000 noktadan uzun çizgilerin bölünmesi, benzersiz çizgi kimlikleri, `hh:mm` saatleri). `store.ts` her gönderimde çalıştırır; veri değiştiyse yerel kaydı da günceller.

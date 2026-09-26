@@ -1,10 +1,11 @@
 import {z} from 'zod';
 import C from '../shared/constants.json' with {type: 'json'};
+import {LIMITS} from '../shared/repair.mjs';
 
 export const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'Geçersiz kimlik.');
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 // Kâğıdın dışına (uzaklaştırılmışken kenara) yazılabilir; konumlar geniş bir aralıkta kabul edilir.
-export const COORD_MIN = -20000, COORD_MAX = 30000;
+export const COORD_MIN = LIMITS.coordMin, COORD_MAX = LIMITS.coordMax;
 const coord = z.number().finite().min(COORD_MIN).max(COORD_MAX);
 const fontId = z.string().regex(/^[a-z0-9:-]{1,60}$/);
 const shortId = z.string().regex(/^[A-Za-z0-9_-]{1,40}$/);

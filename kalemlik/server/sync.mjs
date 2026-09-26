@@ -3,6 +3,7 @@ import {HttpError} from './errors.mjs';
 import {transaction} from './db.mjs';
 import {ENTITIES, collectFileRefs, fromRow, selectColumns, toColumn} from './entities.mjs';
 import {entitySchemas, syncBody, uuid} from './schemas.mjs';
+import {repairRecord} from '../shared/repair.mjs';
 import {activeNotebookCount, currentPlan} from './plans.mjs';
 
 const OVERLAP_MS = 5000;
@@ -12,11 +13,14 @@ const MAX_SETTINGS_BYTES = 64 * 1024;
 export function createSync({pool}) {
   const router = Router();
 
+  // Kayıt önce onarılır (eski/bozuk istemci verisi reddedilmesin), sonra sıkı şemayla doğrulanır.
   function parseData(entity, raw) {
     const schema = entitySchemas[entity];
     if (!schema) throw new HttpError(404, 'Bilinmeyen kayıt türü.');
-    return schema.parse(raw);
+    return schema.parse(repairRecord(entity, raw));
   }
+  // Revizyon eksik/bozuksa 0 sayılır: kayıt sunucuda varsa çakışma (409) döner ve istemci kendini günceller.
+  const parseBody = body => syncBody.parse({rev: Number.isInteger(body?.rev) && body.rev >= 0 ? body.rev : 0, data: body?.data});
 
   async function assertFilesOwned(db, userId, ids) {
     const unique = [...new Set(ids)];
@@ -73,7 +77,7 @@ export function createSync({pool}) {
 
   // ---- kullanıcı ayarları (tek kayıt)
   router.put('/sync/settings/me', async (req, res) => {
-    const body = syncBody.parse(req.body);
+    const body = parseBody(req.body);
     const {data} = parseData('settings', body.data);
     const json = JSON.stringify(data);
     if (Buffer.byteLength(json) > MAX_SETTINGS_BYTES) throw new HttpError(413, 'Ayarlar çok büyük.');
@@ -97,7 +101,7 @@ export function createSync({pool}) {
     const def = ENTITIES[entity];
     if (!def) throw new HttpError(404, 'Bilinmeyen kayıt türü.');
     const id = uuid.parse(req.params.id);
-    const body = syncBody.parse(req.body);
+    const body = parseBody(req.body);
     const data = parseData(entity, body.data);
     const userId = req.user.id;
     const now = Date.now();

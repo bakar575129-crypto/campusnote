@@ -107,6 +107,7 @@ Uygulama bir kez internetle açıldıktan sonra çevrimdışı da açılır; aç
 1. Uygulamayı cPanel'den **Stop** edin.
 2. `.env` ve `storage/` klasörünü **koruyarak** yeni paketteki dosyaları üzerine kopyalayın (`dist/`, `server/`, `sql/`, `scripts/`, `shared/`, `package*.json`, `app.js`).
 3. `npm ci --omit=dev` → **Restart**. Veritabanı güncellemeleri sunucu açılırken otomatik uygulanır (isterseniz `npm run db:migrate` ile elle de çalıştırabilirsiniz).
+4. Doğrulama: tarayıcıda `https://alan-adiniz/api/health` adresini açın; `"version"` yeni paketin sürümünü (ör. `1.1.2`) göstermelidir. Eski sürüm görünüyorsa uygulama yeniden başlatılmamıştır — cPanel'de **Restart** edin. Açık kalmış tablet/telefon uygulamaları, sunucu güncellenince kendini yeniler.
 
 ## 11. Yedekleme
 

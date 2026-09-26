@@ -111,21 +111,36 @@ test('defter + sayfa eşitleme, çakışma, silme izi', async () => {
   const stroke = {id: 's1', t: 'pen', pen: 'ballpoint', c: '#222222', w: 3, o: 1, pts: [10, 10, 0.5, 20, 20, 0.6]};
   r = await c('PUT', `/api/sync/page/${pg}`, {rev: 0, data: page(nb, {strokes: [stroke]})});
   assert.equal(r.status, 200);
-  // Bozuk nokta dizisi reddedilir
-  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [{...stroke, pts: [1, 2]}]})});
-  assert.equal(r.status, 400);
-  assert.equal(r.body.field, 'content.strokes.0.pts');
-  // Kâğıdın çok dışına taşan çizgi ve üstüne yazılan bloknot kabul edilir
-  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [{...stroke, pts: [-4000, 12000, 0.5, 900, 900, 0.5]}], stickers: [{id: 'n1', builtin: 'blok-sari', x: -300, y: 1200, w: 420, h: 420, rot: -5}]})});
-  assert.equal(r.status, 200);
+  // Eski/bozuk istemci verisi reddedilmez, sunucuda onarılır: eksik nokta, null (NaN) nokta, sınır dışı konum,
+  // geçersiz renk, eksik revizyon…
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [{...stroke, pts: [1, 2]}, {...stroke, id: 's1', c: 'red', w: 900, pts: [-90000, 40000, 3, null, 5, 0.5, 7, 8, 0.5]}], texts: [{id: 't!', x: 'a', y: 1e9, w: 1, text: 'not', font: 'Kalam', size: 999, color: '#abc'}]})});
+  assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.rev, 2);
-  // Eski revizyonla yazma → 409 + sunucudaki güncel kayıt
-  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page(nb, {strokes: []})});
+  let saved = (await c('GET', `/api/notebooks/${nb}/pages`)).body.pages[0].content;
+  assert.deepEqual(saved.strokes[0].pts, [1, 2, 0.5]);
+  assert.deepEqual(saved.strokes[1].pts, [-20000, 30000, 1, 7, 8, 0.5]);
+  assert.notEqual(saved.strokes[0].id, saved.strokes[1].id);
+  assert.equal(saved.strokes[1].c, '#1b2433');
+  assert.equal(saved.texts[0].color, '#aabbcc');
+  // Revizyonu olmayan gönderim → çakışma (istemci güncel kaydı alır), sayfa bozulmaz
+  r = await c('PUT', `/api/sync/page/${pg}`, {data: page(nb)});
+  assert.equal(r.status, 409);
+  assert.equal(r.body.current.rev, 2);
+  // Onarılamayan veri (geçersiz defter kimliği) hangi alan olduğunu bildirerek reddedilir
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page('defter-yok')});
+  assert.equal(r.status, 400);
+  assert.equal(r.body.field, 'notebookId');
+  // Kâğıdın çok dışına taşan çizgi ve üstüne yazılan bloknot kabul edilir
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page(nb, {strokes: [{...stroke, pts: [-4000, 12000, 0.5, 900, 900, 0.5]}], stickers: [{id: 'n1', builtin: 'blok-sari', x: -300, y: 1200, w: 420, h: 420, rot: -5}]})});
+  assert.equal(r.status, 200);
   assert.equal(r.body.rev, 3);
-  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page(nb, {strokes: [stroke, stroke]})});
+  // Eski revizyonla yazma → 409 + sunucudaki güncel kayıt
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 3, data: page(nb, {strokes: []})});
+  assert.equal(r.body.rev, 4);
+  r = await c('PUT', `/api/sync/page/${pg}`, {rev: 3, data: page(nb, {strokes: [stroke, stroke]})});
   assert.equal(r.status, 409);
   assert.equal(r.body.code, 'CONFLICT');
-  assert.equal(r.body.current.rev, 3);
+  assert.equal(r.body.current.rev, 4);
 
   r = await c('GET', `/api/notebooks/${nb}/pages`);
   assert.equal(r.body.pages.length, 1);
@@ -216,13 +231,15 @@ test('dosya yükleme: imza doğrulama, sahiplik, kullanım ve temizlik', async (
 test('ders ve görev doğrulama', async () => {
   const c = client();
   await c('POST', '/api/auth/register', {name: 'Deniz', email: 'deniz@ornek.com', password: 'guclu-sifre-333'});
-  let r = await c('PUT', `/api/sync/lesson/${randomUUID()}`, {rev: 0, data: {title: 'Fizik', day: 0, start: '10:00', end: '09:00', room: '', instructor: '', color: '#123456', note: ''}});
-  assert.equal(r.status, 400);
-  assert.match(r.body.error, /bitişi/);
+  // Bitişi başlangıçtan önce olan ders reddedilmez; bitiş bir saat sonraya alınır
+  const lessonId = randomUUID();
+  let r = await c('PUT', `/api/sync/lesson/${lessonId}`, {rev: 0, data: {title: 'Fizik', day: 0, start: '10:00', end: '09:00', room: '', instructor: '', color: '#123456', note: ''}});
+  assert.equal(r.status, 200);
+  assert.equal((await c('GET', '/api/sync?since=0')).body.records.lesson.find(l => l.id === lessonId).end, '11:00');
   r = await c('PUT', `/api/sync/lesson/${randomUUID()}`, {rev: 0, data: {title: 'Fizik', day: 0, start: '09:00', end: '10:30', room: 'B-201', instructor: 'Dr. Ak', color: '#123456', note: ''}});
   assert.equal(r.status, 200);
-  r = await c('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'Ödev 1', course: 'Fizik', description: '', dueDate: '2026-02-30', dueTime: '', category: 'homework', color: '#123456', done: false, completedAt: null}});
-  assert.equal(r.status, 400);
+  r = await c('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'Ödev 1', course: 'Fizik', description: '', dueDate: '', dueTime: '9:5:00', category: 'ödev', color: '#123456', done: 'evet', completedAt: null}});
+  assert.equal(r.status, 200, 'eksik tarih/saat/kategori onarılır');
   r = await c('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'Vize', course: 'Fizik', description: 'Bölüm 1-3', dueDate: '2026-11-12', dueTime: '10:00', category: 'exam', color: '#123456', done: false, completedAt: null}});
   assert.equal(r.status, 200);
   r = await c('PUT', '/api/sync/settings/me', {rev: 0, data: {data: {theme: 'dark'}}});
@@ -338,7 +355,11 @@ test('hazır sticker ve galeri görseli sayfaya yerleşir', async () => {
   let r = await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: page(nb, {stickers: [placed]})});
   assert.equal(r.status, 200);
   r = await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: page(nb, {stickers: [{...placed, fileId: randomUUID()}]})});
-  assert.equal(r.status, 400, 'hem dosya hem hazır sticker olamaz');
-  r = await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: page(nb, {stickers: [{id: 'p2', x: 0, y: 0, w: 10, h: 10, rot: 0}]})});
-  assert.equal(r.status, 400, 'kaynağı olmayan görsel reddedilir');
+  assert.equal(r.status, 409, 'hem dosya hem hazır sticker: dosya esas alınır, yüklenmemişse beklenir');
+  assert.equal(r.body.code, 'MISSING_FILE');
+  const pg2 = randomUUID();
+  r = await c('PUT', `/api/sync/page/${pg2}`, {rev: 0, data: page(nb, {stickers: [{id: 'p2', x: 0, y: 0, w: 10, h: 10, rot: 0}, placed]})});
+  assert.equal(r.status, 200, 'kaynağı olmayan görsel atlanır, sayfa kaydedilir');
+  const pages = (await c('GET', `/api/notebooks/${nb}/pages`)).body.pages;
+  assert.deepEqual(pages.find(p => p.id === pg2).content.stickers.map(s => s.id), ['p1']);
 });
