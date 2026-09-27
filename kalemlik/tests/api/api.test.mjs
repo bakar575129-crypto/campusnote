@@ -480,3 +480,25 @@ test('Kalemlik AI: sohbet geçmişi, kullanıcı verisiyle bağlam, içerik üre
   assert.equal(r.body.code, 'PLAN_FEATURE');
   await pool.execute("UPDATE plans SET ai_daily_limit=15, features=? WHERE id='free'", [JSON.stringify({aiFlashcards: true, aiQuiz: true, aiPlan: true, transcription: false, premiumTemplates: false, collaboration: true, maxCollaborators: 3})]);
 });
+
+test('arama: yalnızca kendi sayfaları, JSON anahtarlarındaki eşleşme sayılmaz, Türkçe harf duyarsız', async () => {
+  const c = client(), other = client();
+  await c('POST', '/api/auth/register', {name: 'Ara Bir', email: 'ara1@ornek.com', password: 'guclu-sifre-111'});
+  await other('POST', '/api/auth/register', {name: 'Ara İki', email: 'ara2@ornek.com', password: 'guclu-sifre-222'});
+  const nb = randomUUID();
+  await c('PUT', `/api/sync/notebook/${nb}`, {rev: 0, data: notebook()});
+  const text = (t, extra = {}) => page(nb, {texts: [{id: 't', x: 10, y: 10, w: 300, text: t, font: 'nunito', size: 20, color: '#000000'}], ...extra});
+  await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: text('Öğrenci işleri: mitokondri')});
+  await c('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: {...text('başka'), position: 2}});
+  let r = await c('GET', '/api/search?q=ogrenci');
+  assert.equal(r.body.pages.length, 1);
+  assert.match(r.body.pages[0].snippet, /Öğrenci işleri/);
+  r = await c('GET', '/api/search?q=nunito');
+  assert.equal(r.body.pages.length, 0, 'yazı tipi adı (JSON anahtarı) sonuç sayılmaz');
+  r = await other('GET', '/api/search?q=mitokondri');
+  assert.equal(r.body.pages.length, 0, 'başkasının sayfası bulunmaz');
+  r = await c('GET', '/api/search?q=a');
+  assert.equal(r.status, 400, 'en az 2 karakter');
+  r = await c('GET', '/api/search?q=%25_');
+  assert.equal(r.body.pages.length, 0, 'joker karakter kaçırılır');
+});

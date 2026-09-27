@@ -4,7 +4,7 @@
 
 import {useSyncExternalStore} from 'react';
 import {api, ApiError} from './api';
-import {idbAllByUser, idbBatch, idbGet, idbPut} from './idb';
+import {idbAllByUser, idbBatch, idbEntries, idbGet, idbPut} from './idb';
 import {uuid} from './ids';
 import type {EntityMap, EntityName, Page, PageContent} from './types';
 import {ENTITY_NAMES} from './types';
@@ -233,6 +233,19 @@ export async function loadNotebookPages(notebookId: string, force = false): Prom
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) emit({type: 'unauthorized'});
   }
+}
+
+/**
+ * Bu cihazdaki bütün sayfa içerikleri (bellekte olanlar + IndexedDB). Arama için: defterleri tek tek açmadan
+ * tüm notlarda metin aranabilsin. Hiç açılmamış ve cihaza inmemiş sayfalar sunucu aramasıyla bulunur.
+ */
+export async function allPageContents(): Promise<Map<string, PageContent>> {
+  const out = new Map<string, PageContent>();
+  if (!userId) return out;
+  const stored = await idbEntries<PageContent>('pageContent', userId + '|').catch(() => [] as [string, PageContent][]);
+  for (const [key, value] of stored) out.set(key.slice(userId.length + 1), value);
+  for (const rec of tables.get('page')!.values()) { const c = (rec.data as Page).content; if (c) out.set(rec.id, c); }
+  return out;
 }
 
 export function notebookPages(notebookId: string): Page[] {

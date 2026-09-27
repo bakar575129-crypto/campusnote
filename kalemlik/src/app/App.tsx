@@ -19,6 +19,9 @@ import {QuizPage} from '@/features/study/QuizPage';
 import {PlanPage as StudyPlanPage} from '@/features/study/PlanPage';
 import {GenerateHost} from '@/features/study/GenerateDialog';
 import {AiPage} from '@/features/ai/AiPage';
+import {SearchPage} from '@/features/search/SearchPage';
+import {GradesPage} from '@/features/grades/GradesPage';
+import {startBrowserNotifier} from '@/features/notify/notifications';
 import {onStoreEvent, useList} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
 import {setCustomFonts} from '@/features/fonts/fonts';
@@ -68,6 +71,7 @@ function SignedIn() {
   const {path} = useLocation();
   useTheme();
   const {query} = useLocation();
+  useEffect(() => startBrowserNotifier(), []);
   const editor = match('/defter/:id', path);
   if (editor) return <Suspense fallback={<Splash />}><CustomFonts /><EditorPage id={editor.id} /><GenerateHost /></Suspense>;
   let page;
@@ -89,6 +93,8 @@ function SignedIn() {
     case '/yonetim': page = <AdminPage />; break;
     case '/calisma': page = <StudyPage />; break;
     case '/ai': page = <AiPage />; break;
+    case '/ara': page = <SearchPage />; break;
+    case '/notlarim': page = <GradesPage />; break;
     default: page = <NotebooksPage mode="all" />;
   }
   return <Shell><CustomFonts />{page}<GenerateHost /></Shell>;

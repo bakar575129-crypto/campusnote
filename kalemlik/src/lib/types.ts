@@ -97,6 +97,24 @@ export interface UserSettings {
   recentColors: string[];
   /** Günlük çalışma hedefi (dakika). */
   studyGoal: number;
+  /** Harf notu ölçeği ve ortalamanın tam sayıya yuvarlanıp yuvarlanmadığı (üniversiteye göre). */
+  gradeScale: {letter: string; min: number; point: number}[];
+  gradeRounding: boolean;
+  notifications: NotificationPrefs;
+  /** Kapatılan bildirimler (kimlikleri; cihazlar arasında eşitlenir). */
+  notifDismissed: string[];
+}
+
+export interface NotificationPrefs {
+  exam: boolean; homework: boolean; study: boolean; flashcard: boolean; streak: boolean; ai: boolean;
+  /** Sınav hatırlatması: kaç gün kala (ör. 7, 3, 1). */
+  examDays: number[];
+  /** Ödev hatırlatması: kaç gün kala. */
+  homeworkDays: number;
+  /** Çalışma hedefi hatırlatmasının saati. */
+  studyTime: string;
+  /** Tarayıcı / telefon bildirimi (izin verildiyse). */
+  browser: boolean;
 }
 
 export interface EntityMap {

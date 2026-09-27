@@ -61,3 +61,61 @@ self.addEventListener('fetch', event => {
     })());
   }
 });
+
+// ---- bildirimler: tıklanınca ilgili sayfayı aç (açık bir Kalemlik penceresi varsa ona geç)
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || '/';
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+    for (const w of wins) {
+      if (new URL(w.url).origin === location.origin) { await w.focus(); if ('navigate' in w) await w.navigate(link).catch(() => {}); return; }
+    }
+    await self.clients.openWindow(link);
+  })());
+});
+
+// ---- telefona yüklü uygulamada arka plan hatırlatması (Periodic Background Sync destekleyen tarayıcılar):
+// cihazdaki IndexedDB'den sınav ve ödev tarihleri okunur; her hatırlatma bir kez gösterilir. İnternet gerekmez.
+function idbOpen() {
+  return new Promise((resolve, reject) => { const r = indexedDB.open('kalemlik'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+}
+function idbAll(db, store) {
+  return new Promise((resolve, reject) => { const r = db.transaction(store).objectStore(store).getAll(); r.onsuccess = () => resolve(r.result || []); r.onerror = () => reject(r.error); });
+}
+function idbGetKey(db, store, key) {
+  return new Promise(resolve => { const r = db.transaction(store).objectStore(store).get(key); r.onsuccess = () => resolve(r.result); r.onerror = () => resolve(undefined); });
+}
+function idbSet(db, store, key, value) {
+  return new Promise(resolve => { const tx = db.transaction(store, 'readwrite'); tx.objectStore(store).put(value, key); tx.oncomplete = () => resolve(); tx.onerror = () => resolve(); });
+}
+const localIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const daysUntil = (from, to) => Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000);
+
+async function remind() {
+  const db = await idbOpen();
+  const records = await idbAll(db, 'records');
+  const today = localIso(new Date());
+  const byUser = new Map();
+  for (const r of records) { if (!byUser.has(r.userId)) byUser.set(r.userId, []); byUser.get(r.userId).push(r); }
+  for (const [userId, recs] of byUser) {
+    const settings = (recs.find(r => r.entity === 'settings') || {}).data || {};
+    const prefs = Object.assign({exam: true, homework: true, examDays: [7, 3, 1], homeworkDays: 2, browser: false}, (settings.data || {}).notifications || {});
+    if (!prefs.browser) continue;
+    const shownKey = `${userId}|sw-notified`;
+    const shown = new Set((await idbGetKey(db, 'meta', shownKey)) || []);
+    for (const r of recs) {
+      if (r.entity !== 'task' || r.deleted || !r.data || r.data.done) continue;
+      const t = r.data, d = daysUntil(today, t.dueDate);
+      let title = '';
+      if (t.category === 'exam' && prefs.exam && (d === 0 || (prefs.examDays || []).includes(d))) title = d === 0 ? `Bugün sınavın var: ${t.title}` : `Sınavına ${d} gün kaldı.`;
+      if (t.category === 'homework' && prefs.homework && d >= 0 && d <= prefs.homeworkDays) title = d === 0 ? `${t.course || t.title} ödevi bugün teslim.` : `${t.course ? t.course + ' ödevinin' : 'Ödevinin'} teslimine ${d} gün kaldı.`;
+      const id = `${t.category === 'exam' ? 'exam' : 'hw'}:${r.id}:${d}`;
+      if (!title || shown.has(id)) continue;
+      await self.registration.showNotification(title, {body: t.title, tag: id, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', data: {link: '/gorevler'}});
+      shown.add(id);
+    }
+    await idbSet(db, 'meta', shownKey, [...shown].slice(-300));
+  }
+}
+self.addEventListener('periodicsync', event => { if (event.tag === 'kalemlik-hatirlatma') event.waitUntil(remind().catch(() => {})); });

@@ -13,6 +13,7 @@ import {PAPERS} from '@/features/editor/paper';
 import {BUILTIN_FONTS, allFonts, fontStack, inspectFontFile, ensureFont} from '@/features/fonts/fonts';
 import type {StylusAction} from '@/lib/types';
 import {BeautifyControls} from '@/features/editor/BeautifyControls';
+import {NotificationSettings} from '@/features/notify/NotificationCenter';
 import {logout} from '@/app/session';
 
 const ACCENTS = ['#2f6fed', '#1f9d7a', '#8b5cf6', '#e0643a', '#d9467a', '#0e7490', '#1f3a5f', '#b45309'];
@@ -99,6 +100,8 @@ export function SettingsPage() {
           <Field label="Kalemin silgi ucu" htmlFor="st-tip"><select id="st-tip" className="select" value={s.stylus.tip} onChange={e => updateSettings({stylus: {tip: e.target.value as StylusAction}})}>{Object.entries(STYLUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
         </div>
       </section>
+
+      <NotificationSettings />
 
       <section className="card card-pad settings-section">
         <h2>Akıllı Yazı Güzelleştirme</h2>

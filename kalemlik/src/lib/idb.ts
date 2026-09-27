@@ -87,3 +87,12 @@ export async function idbClearUser(userId: string): Promise<void> {
   }
   await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
 }
+
+/** Anahtarı "önek|" ile başlayan tüm kayıtlar: [anahtar, değer] çiftleri (ör. bir kullanıcının tüm sayfa içerikleri). */
+export async function idbEntries<T>(store: StoreName, prefix: string): Promise<[string, T][]> {
+  const db = await openDb();
+  const range = IDBKeyRange.bound(prefix, prefix + '￿');
+  const tx = db.transaction(store);
+  const [keys, values] = await Promise.all([wrap(tx.objectStore(store).getAllKeys(range)), wrap(tx.objectStore(store).getAll(range))]);
+  return keys.map((k, i) => [String(k), values[i] as T]);
+}

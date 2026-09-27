@@ -1,0 +1,120 @@
+// 1.2 Phase 2: gelişmiş arama, Notlarım (GPA / finalden kaç almalıyım), akıllı bildirimler.
+import {chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+
+const BASE = process.env.BASE_URL || 'http://localhost:3000';
+const browser = await chromium.launch();
+const context = await browser.newContext({viewport: {width: 1280, height: 860}});
+const page = await context.newPage();
+const errors = [];
+page.on('response', r => { if (r.url().includes('/api/sync/') && r.status() === 400) errors.push('eşitleme reddi: ' + r.url()); });
+page.on('pageerror', e => errors.push(e.message));
+page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
+const step = s => console.log('•', s);
+const SHOTS = process.env.SHOTS;
+const shot = async n => { if (SHOTS) await page.screenshot({path: `${SHOTS}/${n}.png`}); };
+const api = (method, url, body) => page.evaluate(async ([method, url, body]) => {
+  const r = await fetch(url, {method, headers: {'x-kalemlik': '1', 'content-type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  return {status: r.status, body: await r.json().catch(() => ({}))};
+}, [method, url, body]);
+const iso = d => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+const cover = {pattern: 'theme', patternOpacity: 0.2, patternSize: 6, showCourse: true, showTerm: true, label: '', stickers: []};
+const pageWith = (nb, text, extra = {}) => ({notebookId: nb, position: 1, content: {v: 1, template: 'lined', width: 1000, height: 1414, strokes: [], texts: [{id: 't1', x: 60, y: 80, w: 800, text, font: 'nunito', size: 20, color: '#1b2433'}], stickers: [], ...extra}});
+
+await page.goto(BASE + '/kayit');
+await page.fill('#name', 'Arama Test'); await page.fill('#email', `p2${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
+await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+
+step('veri: iki defter (biri favori), PDF metinli sayfa, sınav, ödev, zayıf konulu quiz');
+const nb1 = randomUUID(), nb2 = randomUUID(), pg1 = randomUUID();
+await api('PUT', `/api/sync/notebook/${nb1}`, {rev: 0, data: {title: 'Biyoloji', course: 'Biyoloji', term: '', color: '#1f9d7a', paper: 'lined', cover, favorite: true, trashedAt: null, lastOpenedAt: null}});
+await api('PUT', `/api/sync/notebook/${nb2}`, {rev: 0, data: {title: 'Fizik', course: 'Fizik', term: '', color: '#2f6fed', paper: 'lined', cover, favorite: false, trashedAt: null, lastOpenedAt: null}});
+await api('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: {...pageWith(nb1, 'Kapak notu'), position: 0}});
+await api('PUT', `/api/sync/page/${pg1}`, {rev: 0, data: pageWith(nb1, 'Mitokondri hücrenin enerji santralidir. Öğrenci notu.')});
+await api('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: pageWith(nb2, 'Newton', {searchText: 'PDF: Kuvvet ve hareket, mitokondri değil'})});
+await api('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'Biyoloji Final', course: 'Biyoloji', description: 'Mitokondri konusu', dueDate: iso(7), dueTime: '', category: 'exam', color: '#d9467a', done: false, completedAt: null}});
+await api('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'Hareket soruları', course: 'Fizik', description: '', dueDate: iso(2), dueTime: '', category: 'homework', color: '#2f6fed', done: false, completedAt: null}});
+await api('PUT', `/api/sync/quiz/${randomUUID()}`, {rev: 0, data: {title: 'Türev quizi', course: 'Matematik', source: '', difficulty: 'mixed', questions: [{id: 'q1', type: 'tf', prompt: 'x', options: ['Doğru', 'Yanlış'], answer: 'Doğru', explanation: '', topic: 'Türev'}], result: {answers: {q1: 'Yanlış'}, correct: 0, wrong: 1, total: 1, percent: 0, weakTopics: ['Türev'], finishedAt: Date.now()}, completedAt: Date.now()}});
+await page.reload();
+await page.waitForSelector('text=Biyoloji');
+
+step('arama: Ctrl+K, Türkçe harfsiz yazım (OGRENCI → öğrenci), sonuçtan doğrudan sayfaya');
+await page.keyboard.press('Control+k');
+await page.waitForURL('**/ara');
+await page.fill('.search-input', 'OGRENCI');
+await page.waitForSelector('.search-row');
+assert.match(await page.locator('.search-row').first().innerText(), /Not sayfası[\s\S]*Öğrenci notu/);
+await page.fill('.search-input', 'mitokondri');
+await page.waitForFunction(() => document.querySelectorAll('.search-row').length >= 3);
+await shot('50-arama');
+const types = await page.locator('.search-row .badge').allInnerTexts();
+assert.ok(types.includes('Sınav') && types.includes('Not sayfası'), `sınav ve sayfalar bulunmalı: ${types}`);
+step('filtreler: içerik tipi, ders, favoriler');
+await page.getByRole('button', {name: /^Sınav/}).click();
+assert.equal(await page.locator('.search-row').count(), 1);
+await page.getByRole('button', {name: /^Sınav/}).click();
+await page.selectOption('select[aria-label="Ders"]', 'Fizik');
+assert.equal(await page.locator('.search-row').count(), 1, 'Fizik: PDF metni');
+await page.selectOption('select[aria-label="Ders"]', '');
+await page.getByRole('switch', {name: /Yalnızca favoriler/}).click();
+assert.ok((await page.locator('.search-row').allInnerTexts()).every(t => /Biyoloji/.test(t)));
+await page.getByRole('switch', {name: /Yalnızca favoriler/}).click();
+await page.locator('.search-row', {hasText: 'enerji santralidir'}).click();
+await page.waitForURL(`**/defter/${nb1}?sayfa=${pg1}`);
+await page.waitForSelector('.page-nav-label');
+assert.match(await page.locator('.page-nav-label').innerText(), /Sayfa 2/, 'aranan sayfa açılır');
+
+step('sunucu araması: bu cihaza inmemiş sayfa da bulunur');
+const nb3 = randomUUID();
+await api('PUT', `/api/sync/notebook/${nb3}`, {rev: 0, data: {title: 'Kimya', course: 'Kimya', term: '', color: '#e0643a', paper: 'lined', cover, favorite: false, trashedAt: null, lastOpenedAt: null}});
+await api('PUT', `/api/sync/page/${randomUUID()}`, {rev: 0, data: pageWith(nb3, 'Avogadro sayısı 6,02 × 10^23')});
+await page.goto(BASE + '/ara?q=avogadro');
+await page.waitForSelector('.search-row');
+assert.match(await page.locator('.search-row').first().innerText(), /Avogadro/);
+
+step('Notlarım: ders ekle (vize 60 %40, final 76 %60 → 70 CC), GANO, finalden kaç almalıyım');
+await page.goto(BASE + '/notlarim');
+await page.getByRole('button', {name: 'Ders ekle'}).first().click();
+await page.waitForTimeout(250); // pencere ilk alana odaklanana kadar
+await page.fill('#gc-name', 'Fizik I');
+await page.fill('#gc-credit', '4');
+await page.getByRole('dialog').getByLabel('Vize notu').fill('60');
+await page.getByRole('dialog').getByLabel('Final notu').fill('76');
+await page.getByRole('dialog').getByRole('button', {name: 'Kaydet'}).click();
+await page.waitForSelector('.grade-row-item');
+assert.match(await page.locator('.grade-row-item').innerText(), /Fizik I\n4 kredi[\s\S]*70[\s\S]*CC/);
+assert.match(await page.locator('.stat-tile').first().innerText(), /2,00/);
+await page.getByRole('button', {name: 'Ders ekle'}).first().click();
+await page.waitForTimeout(250);
+await page.fill('#gc-name', 'Kimya');
+await page.getByRole('dialog').getByLabel('Vize notu').fill('50');
+await page.getByRole('dialog').getByRole('button', {name: 'Kaydet'}).click();
+await page.waitForFunction(() => document.querySelectorAll('.grade-row-item').length === 2);
+assert.match(await page.locator('.grade-row-item', {hasText: 'Kimya'}).innerText(), /Final için:[\s\S]*CC → \d+/);
+assert.match(await page.locator('.calc-result').innerText(), /Finalden en az 76 almalısın/);
+await page.fill('#fc-target', '99');
+assert.match(await page.locator('.calc-result').innerText(), /100 alsan bile/);
+await shot('51-notlarim');
+
+step('bildirimler: sınav, ödev, AI önerisi; okundu; türü kapatma');
+const bell = page.locator('.sidebar .notif-bell');
+await bell.click();
+const texts = await page.locator('.notif-item').allInnerTexts();
+assert.ok(texts.some(t => /Sınavına 7 gün kaldı/.test(t)), texts.join(' | '));
+assert.ok(texts.some(t => /Fizik ödevinin teslimine 2 gün kaldı/.test(t)));
+assert.ok(texts.some(t => /Son quiz sonuçlarına göre bugün Türev tekrar etmen faydalı olabilir/.test(t)));
+await shot('52-bildirimler');
+const before = texts.length;
+await page.locator('.notif-item', {hasText: 'Sınavına 7 gün'}).click();
+await page.waitForTimeout(300);
+await page.goto(BASE + '/ayarlar#bildirimler');
+await page.getByRole('switch', {name: 'Ödev teslimleri'}).click();
+await page.locator('.sidebar .notif-bell').click();
+const after = await page.locator('.notif-item').count();
+assert.equal(after, before - 2, 'okunan sınav ve kapatılan ödev bildirimi görünmez');
+
+await page.waitForFunction(() => document.querySelector('.sync-badge')?.className.includes('sync-idle'), null, {timeout: 15000}).catch(() => {});
+assert.deepEqual(errors, []);
+console.log('✓ Phase 2 testleri geçti');
+await browser.close();

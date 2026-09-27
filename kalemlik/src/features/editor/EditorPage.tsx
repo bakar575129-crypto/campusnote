@@ -110,6 +110,13 @@ export default function EditorPage({id}: {id: string}) {
     return () => { alive = false; off(); };
   }, [id]);
   useEffect(() => { if (index > pages.length) setIndex(pages.length); }, [pages.length, index]);
+  // Aramadan ya da paylaşımdan gelindiyse (?sayfa=<kimlik>) doğrudan o sayfa açılır.
+  const wantPage = useRef(new URLSearchParams(location.search).get('sayfa'));
+  useEffect(() => {
+    if (!wantPage.current) return;
+    const i = pages.findIndex(p => p.id === wantPage.current);
+    if (i >= 0) { setIndex(i + 1); wantPage.current = null; }
+  }, [pages]);
   useEffect(() => { setSelection(emptySelection); setActiveText(null); setActiveSticker(null); }, [index]);
   useEffect(() => { if (content) for (const f of new Set([...content.texts.map(t => t.font), ...content.strokes.flatMap(s => (s.run ? [s.run.font] : []))])) void ensureFont(f); }, [content]);
 

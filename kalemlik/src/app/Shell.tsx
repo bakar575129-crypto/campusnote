@@ -1,9 +1,10 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
+import {Search, Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
 import {Brand} from '@/components/Brand';
-import {linkProps, useLocation} from './router';
+import {linkProps, navigate, useLocation} from './router';
 import {logout, useSession} from './session';
 import {syncNow, useSyncState} from '@/lib/store';
+import {NotificationBell} from '@/features/notify/NotificationCenter';
 import {timeAgo} from '@/lib/format';
 
 export const NAV = [
@@ -58,10 +59,17 @@ export function Shell({children}: {children: ReactNode}) {
   const isActive = (to: string) => path === to || (to === '/defterler' && path === '/') || (to !== '/' && path.startsWith(to + '/'));
   const bottom = user?.role === 'admin' ? [...NAV_BOTTOM, {to: '/yonetim', label: 'Yönetim', icon: Shield}] : NAV_BOTTOM;
   useEffect(() => { setOpen(false); setMore(false); }, [path]);
+  // Ctrl/⌘ + K: her yerden arama.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); navigate('/ara'); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const sidebar = (
     <nav className="sidebar-inner" aria-label="Ana menü">
       <div className="sidebar-brand"><Brand /></div>
+      <button type="button" className="search-trigger" onClick={() => navigate('/ara')}><Search size={18} /><span>Ara</span><kbd>Ctrl K</kbd></button>
       <div className="nav-group">{NAV.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
       <div className="spacer" />
       <div className="nav-group">{bottom.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
@@ -69,6 +77,7 @@ export function Shell({children}: {children: ReactNode}) {
         <div className="user-chip"><span className="avatar">{user?.name.slice(0, 1).toLocaleUpperCase('tr')}</span><span className="user-name">{user?.name}</span>
           <button type="button" className="icon-btn icon-btn-sm" aria-label="Çıkış yap" title="Çıkış yap" onClick={() => void logout()}><LogOut size={18} /></button>
         </div>
+        <NotificationBell />
         <SyncBadge />
       </div>
     </nav>
@@ -81,7 +90,7 @@ export function Shell({children}: {children: ReactNode}) {
       <header className="mobile-top">
         <button type="button" className="icon-btn" aria-label="Menüyü aç" onClick={() => setOpen(true)}><MenuIcon size={22} /></button>
         <Brand />
-        <SyncBadge compact />
+        <span className="row"><button type="button" className="icon-btn" aria-label="Ara" onClick={() => navigate('/ara')}><Search size={21} /></button><NotificationBell compact /><SyncBadge compact /></span>
       </header>
       <main className="main" id="main">{children}</main>
       <nav className="tabbar" aria-label="Hızlı menü">

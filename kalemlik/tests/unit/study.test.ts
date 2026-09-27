@@ -99,3 +99,47 @@ test('desteden gelen S/C metni doğru kartlara dönüşür; tüm metin tek soru 
   const noHeading = localCards('Hücre bölünmesi\nMitoz: İki özdeş hücre', 5);
   assert.equal(noHeading[0].topic, 'Hücre bölünmesi', 'kısa başlık satırı konu olur');
 });
+
+import {courseAverage, courseLetter, DEFAULT_SCALE, gpa, letterFor, neededFinal, neededScore} from '@/features/grades/grades';
+import type {GradeCourse} from '@/lib/types';
+
+const course = (over: Partial<GradeCourse>): GradeCourse => ({id: 'g', rev: 0, createdAt: 0, updatedAt: 0, term: '2026 Güz', name: 'Ders', credit: 3, ects: 5, components: [], letter: '', included: true, ...over});
+
+test('not hesaplama: ağırlıklı ortalama, harf notu, yuvarlama', () => {
+  const c = course({components: [{id: 'v', name: 'Vize', weight: 40, score: 60}, {id: 'f', name: 'Final', weight: 60, score: 76}]});
+  const a = courseAverage(c);
+  assert.equal(a.complete, true);
+  assert.equal(a.avg, 70, '69,6 → 70 (yuvarlanır)');
+  assert.equal(courseAverage(c, false).avg, 69.6);
+  assert.equal(courseLetter(c)!.letter, 'CC');
+  assert.equal(letterFor(89.9)!.letter, 'BA');
+  assert.equal(letterFor(90)!.letter, 'AA');
+  const partial = courseAverage(course({components: [{id: 'v', name: 'Vize', weight: 40, score: 60}, {id: 'f', name: 'Final', weight: 60, score: null}]}));
+  assert.equal(partial.complete, false);
+  assert.equal(partial.soFar, 24);
+  assert.equal(partial.missing[0].name, 'Final');
+});
+
+test('Finalden kaç almalıyım: vize 60 (%40), final %60, hedef 70 → en az 76', () => {
+  assert.equal(neededFinal(60, 40, 60, 70), 76);
+  assert.equal(neededFinal(60, 40, 60, 70, false), 77, 'yuvarlanmıyorsa 76,67 → 77');
+  assert.equal(neededFinal(100, 40, 60, 40), 'done');
+  assert.equal(neededFinal(10, 40, 60, 90), 'impossible');
+  const comps = [{id: 'v', name: 'Vize', weight: 30, score: 80}, {id: 'o', name: 'Ödev', weight: 20, score: 90}, {id: 'f', name: 'Final', weight: 50, score: null}];
+  assert.equal(neededScore(comps, 'f', 85), 85, '(84,5 − 42) / 0,5 = 85');
+});
+
+test('GANO: kredi ağırlıklı; kalınan ders AKTS kazandırmaz; hariç tutulan ders hesaba girmez', () => {
+  const full = (score: number) => [{id: 'x', name: 'Final', weight: 100, score}];
+  const r = gpa([
+    course({name: 'A', credit: 4, ects: 6, components: full(92)}), // AA 4.0
+    course({name: 'B', credit: 2, ects: 3, components: full(71)}), // CC 2.0
+    course({name: 'C', credit: 3, ects: 5, components: full(30)}), // FF 0
+    course({name: 'D', credit: 3, ects: 5, letter: 'BB', components: []}), // elle BB 3.0
+    course({name: 'E', credit: 3, ects: 5, components: full(100), included: false}),
+    course({name: 'F', credit: 3, ects: 5, components: [{id: 'v', name: 'Vize', weight: 40, score: 50}, {id: 'f', name: 'Final', weight: 60, score: null}]}),
+  ], DEFAULT_SCALE);
+  assert.equal(r.gpa, Math.round(((4 * 4 + 2 * 2 + 0 * 3 + 3 * 3) / 12) * 100) / 100);
+  assert.equal(r.ects, 14);
+  assert.equal(r.counted, 4);
+});

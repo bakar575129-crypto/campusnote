@@ -1,6 +1,7 @@
 import {useSyncExternalStore} from 'react';
 import {get, put, subscribe} from './store';
 import type {PenSetting, UserSettings} from './types';
+import {DEFAULT_SCALE} from '@/features/grades/grades';
 import type {PenId} from './constants';
 
 export const PEN_DEFAULTS: Record<PenId, PenSetting> = {
@@ -30,6 +31,10 @@ export const DEFAULT_SETTINGS: UserSettings = {
   focus: {work: 25, short: 5, long: 15, every: 4, autoBreak: false, sound: true},
   recentColors: [],
   studyGoal: 90,
+  gradeScale: DEFAULT_SCALE,
+  gradeRounding: true,
+  notifications: {exam: true, homework: true, study: true, flashcard: true, streak: true, ai: true, examDays: [7, 3, 1], homeworkDays: 2, studyTime: '20:00', browser: false},
+  notifDismissed: [],
 };
 
 let cache: {raw: unknown; value: UserSettings} | null = null;
@@ -65,6 +70,10 @@ export function resolveSettings(raw: Partial<UserSettings> | undefined): UserSet
     text: {...d.text, ...(s.text || {})},
     focus: {...d.focus, ...(s.focus || {})},
     recentColors: Array.isArray(s.recentColors) ? s.recentColors.slice(0, 12) : [],
+    gradeScale: Array.isArray(s.gradeScale) && s.gradeScale.length && s.gradeScale.every(r => r && typeof r.letter === 'string' && Number.isFinite(r.min) && Number.isFinite(r.point)) ? s.gradeScale.slice(0, 20) : d.gradeScale,
+    gradeRounding: s.gradeRounding !== false,
+    notifications: {...d.notifications, ...(s.notifications || {}), examDays: Array.isArray(s.notifications?.examDays) ? s.notifications!.examDays.filter(n => Number.isInteger(n) && n > 0 && n <= 60).slice(0, 5) : d.notifications.examDays},
+    notifDismissed: Array.isArray(s.notifDismissed) ? s.notifDismissed.filter(x => typeof x === 'string').slice(-300) : [],
     studyGoal: Number.isFinite(s.studyGoal) && (s.studyGoal as number) >= 10 && (s.studyGoal as number) <= 900 ? Math.round(s.studyGoal as number) : d.studyGoal,
   };
 }
