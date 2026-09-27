@@ -36,7 +36,7 @@ Aynı satırda **Stop App** düğmesine basın.
 **Setup Node.js App** → Kalemlik → **Start App** (çalışıyorsa **Restart**).
 
 `package.json` bağımlılıkları değiştiyse sürüm notlarında belirtilir; o durumda başlatmadan önce aynı sayfada
-**Run NPM Install** düğmesine basın. (1.1.x → 1.2.0 arasında bağımlılık değişmedi; **Run NPM Install gerekmez**.)
+**Run NPM Install** düğmesine basın. (1.1.x → 1.2.x arasında bağımlılık değişmedi; **Run NPM Install gerekmez**.)
 
 Veritabanı güncellemeleri uygulama açılırken otomatik yapılır (1.2.0: yeni tablolar eklenir, mevcut veriler silinmez ya da değiştirilmez).
 
@@ -51,7 +51,7 @@ Tarayıcıda şu adresi açın:
 https://alan-adiniz/api/health
 ```
 
-`{"ok":true,"version":"1.2.0"}` gibi **yeni sürüm numarası** görmelisiniz.
+`{"ok":true,"version":"1.2.1"}` gibi **yeni sürüm numarası** görmelisiniz.
 
 - Eski numara görünüyorsa uygulama yeniden başlamamıştır: 4. adımı tekrarlayın. Olmazsa cPanel'de
   **Stop App** → birkaç saniye bekleyin → **Start App**.
@@ -63,5 +63,5 @@ https://alan-adiniz/api/health
 Tablette / telefonda / bilgisayarda Kalemlik'i açıp **sayfayı bir kez yenileyin** (uygulama olarak yüklüyse kapatıp
 açın). 1.1.2 ve sonrası, sunucu güncellendiğinde kendini otomatik yeniler.
 
-Sürümü **Ayarlar** sayfasının en altında görebilirsiniz ("Sürüm 1.2.0").
+Sürümü **Ayarlar** sayfasının en altında görebilirsiniz ("Sürüm 1.2.1").
 Cihazda kaydedilemeyip bekleyen değişiklikler güncellemeden sonra kendiliğinden gönderilir; hiçbir şey kaybolmaz.

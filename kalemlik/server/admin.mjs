@@ -30,7 +30,7 @@ const grantsBody = z.object({extraStorageMb: z.number().int().min(0).max(10_000_
 const planBody = z.object({name: z.string().trim().min(1).max(60), storageMb: z.number().int().min(10).max(10_000_000), notebookLimit: z.number().int().min(0).max(100_000), ocrDailyLimit: z.number().int().min(0).max(1_000_000), priceMonthly: z.number().min(0).max(1_000_000), active: z.boolean(),
   aiDailyLimit: z.number().int().min(0).max(1_000_000).optional(),
   features: z.object({aiFlashcards: z.boolean(), aiQuiz: z.boolean(), aiPlan: z.boolean(), transcription: z.boolean(), premiumTemplates: z.boolean(), collaboration: z.boolean(), maxCollaborators: z.number().int().min(0).max(10_000)}).partial().optional()});
-const settingsBody = z.object({ocrApiKey: z.string().trim().max(300).optional(), ocrModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional(), aiModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional()});
+const settingsBody = z.object({workspaceId: z.string().trim().max(100).regex(/^[A-Za-z0-9_-]*$/, 'Çalışma alanı kimliği yalnızca harf, rakam, _ ve - içerebilir (ör. wrkspc_01AbC…).').optional(), ocrApiKey: z.string().trim().max(300).optional(), ocrModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional(), aiModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional()});
 
 export function createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink, extra = []}) {
   const router = Router();
@@ -165,6 +165,9 @@ export function createAdmin({pool, config, mailer, ocr, ai, appSettings, createR
     if (b.ocrApiKey !== undefined) await appSettings.set('ocr_api_key', b.ocrApiKey);
     if (b.ocrModel !== undefined) await appSettings.set('ocr_model', b.ocrModel);
     if (b.aiModel !== undefined) await appSettings.set('ai_model', b.aiModel);
+    if (b.workspaceId !== undefined) await appSettings.set('anthropic_workspace_id', b.workspaceId);
+    // Anahtar ya da çalışma alanı değişince eski hata gösterilmez; yeni ayarla yeniden denenir.
+    if (b.ocrApiKey !== undefined || b.workspaceId !== undefined) { ocr.clearError?.(); ai?.clearError?.(); }
     res.json({ocr: ocr.status(), ai: ai?.status() || null});
   });
   router.post('/system/ocr-test', async (req, res) => {

@@ -6,6 +6,15 @@
 
 **Kurulum:** [KURULUM.md](KURULUM.md) · **Güncelleme:** [GUNCELLEME.md](GUNCELLEME.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
 
+## 1.2.1'de düzeltmeler
+
+- **Akıllı Yazı Güzelleştirme artık tutarlı çalışıyor.**
+  - Kalem bir sonraki kelimeyi yazarken önceki kelimenin dönüşümü gelirse, kalem kalkınca sayfa eski hâliyle kaydedilip dönüşüm siliniyordu ("bazen dönüştürmüyor"un asıl nedeni). Artık kalem kâğıttayken gelen değişiklik kalemin yaptığıyla birleştirilir.
+  - Yavaş yazılan kelime parça parça dönüşmez: bir parça ("B") dönüştükten ya da tanımaya gittikten sonra hemen yanına devam edilirse kelime yeniden açılır ve bütün hâlde tanınır ("Ben"). Sonradan eklenen nokta/şapka da kelimeye katılır. Bekleme süresi kullanıcının yazma ritmine göre uzar.
+  - Çok yakınlaştırılmış ekranda yazılan (kâğıtta küçük kalan) kelime tanımaya okunaklı boyutta gönderilir; iri yazıda harfler satırlara bölünmez.
+  - Sunucuda tanıma kuruluysa ve kullanılamazsa (anahtar sorunu, kota, internet yok) cihazdaki daha zayıf motorla **tahmin yürütülmez** — yanlış kelime yazılmaz, el yazısı korunur ve nedeni söylenir. Başarısız tanıma günlük haktan düşülmez.
+- **"This API key is not scoped to a workspace" hatası çözüldü.** Bu tür anahtarlar için Anthropic isteklerde çalışma alanı kimliği ister: Yönetim → Sistem'e **Çalışma alanı kimliği (Workspace ID)** alanı eklendi (`.env`: `ANTHROPIC_WORKSPACE_ID`). Anahtarın yetkisi yetiyorsa kimlik kendiliğinden bulunup kaydedilir. Hata artık "anahtar geçersiz" yerine gerçek nedeni ve çözümü söyler. Kalemlik AI, el yazısı tanıma ve anahtar kullanan her özellik bu ayarı kullanır.
+
 ## 1.2.0'da yenilikler
 
 - **Akıllı Yazı Güzelleştirme** (eski "otomatik el yazısı düzeltme" tamamen kaldırıldı; kapalıyken yalnızca kendi el yazınla yazarsın). Açıksa kelimen **bittikten sonra** (kalemi kaldırıp beklediğinde — Hızlı 0,3 / Normal 0,6 / Yavaş 1 sn —, sonraki kelimeye geçtiğinde ya da başka araç seçtiğinde) el yazın tanınır ve **seçtiğin yazı tipinde, aynı yerde** gösterilir. Metin yeniden yazılmaz, yazım düzeltilmez, kelime değiştirilmez (mitoz → motor olmaz); Türkçe harfler, rakamlar, matematik işaretleri, noktalama, parantez, %, para birimleri korunur. Tanıma emin değilse el yazın olduğu gibi kalır. Türkçe ve İngilizce; yeni dil eklenebilir.
@@ -128,9 +137,9 @@ kalemlik/
 
 ## Testler
 
-- 37 birim testi: Akıllı Yazı Güzelleştirme (kelime bitmeden dönüştürmeme, aynı konum/taban çizgisi, üst üste bindirmeme, tanıma sonucunun mürekkeple tutarlılığı), rastgele bozuk kayıt onarımı (tüm kayıt türleri), aralıklı tekrar, flashcard/quiz/plan üretimi, not hesaplama ("finalden kaç"), güvenli Markdown, üç yönlü sayfa birleştirme, AI sağlayıcı mantığı, silgi, seçim, şekiller, dosya imzası, şemalar.
+- 40 birim testi (1.2.1: çalışma alanı başlığının gerçekten gönderilmesi, otomatik bulma, iri yazıda satır ayırma dahil): Akıllı Yazı Güzelleştirme (kelime bitmeden dönüştürmeme, aynı konum/taban çizgisi, üst üste bindirmeme, tanıma sonucunun mürekkeple tutarlılığı), rastgele bozuk kayıt onarımı (tüm kayıt türleri), aralıklı tekrar, flashcard/quiz/plan üretimi, not hesaplama ("finalden kaç"), güvenli Markdown, üç yönlü sayfa birleştirme, AI sağlayıcı mantığı, silgi, seçim, şekiller, dosya imzası, şemalar.
 - 16 API testi (MariaDB): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, defter sınırı ve plan, dosya yükleme, yönetim paneli, öğrenme kayıtları, Kalemlik AI (bağlam, izolasyon, kota), arama, ders kaydı ve ses doğrulama, ortak defter ve paylaşım bağlantıları, XP kuralları ve günlük sınır, şablon mağazası ve premium kilidi.
-- 12 tarayıcı testi (`tests/e2e`): genel akış, medya, dokunmatik, çevrimdışı PWA, 1.1 özellikleri ve Akıllı Yazı Güzelleştirme, bloknotlar, yönetim paneli, Çalışma (flashcard/quiz/plan/AI), arama/notlarım/bildirimler, ders kaydı/günlük/widget, ortak defter (üç kullanıcı, canlı eşitleme, salt okunur) ve paylaşım bağlantısı, ana sayfa/şablonlar/XP/profil/dersler (telefon görünümü dahil). Her test tek bir eşitleme reddinde ya da konsol hatasında başarısız olur.
+- 13 tarayıcı testi (`tests/e2e`; 1.2.1: güzelleştirme güvenilirliği — kalem yazarken gelen dönüşüm, parça kelimenin yeniden açılması, yüksek yakınlaştırma, sunucu hatasında el yazısının korunması): genel akış, medya, dokunmatik, çevrimdışı PWA, 1.1 özellikleri ve Akıllı Yazı Güzelleştirme, bloknotlar, yönetim paneli, Çalışma (flashcard/quiz/plan/AI), arama/notlarım/bildirimler, ders kaydı/günlük/widget, ortak defter (üç kullanıcı, canlı eşitleme, salt okunur) ve paylaşım bağlantısı, ana sayfa/şablonlar/XP/profil/dersler (telefon görünümü dahil). Her test tek bir eşitleme reddinde ya da konsol hatasında başarısız olur.
 
 ## Bilinen sınırlar
 

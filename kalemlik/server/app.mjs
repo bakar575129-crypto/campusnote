@@ -118,8 +118,15 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
     const day = new Date().toISOString().slice(0, 10);
     await pool.execute('INSERT IGNORE INTO ocr_usage (user_id,day,count) VALUES (?,?,0)', [req.user.id, day]);
     const [quota] = await pool.execute('UPDATE ocr_usage SET count=count+1 WHERE user_id=? AND day=? AND count<?', [req.user.id, day, plan.ocrDailyLimit]);
-    if (!quota.affectedRows) throw new HttpError(429, 'Bugünkü el yazısı tanıma hakkın doldu. Kendi el yazın düzeltilmeye devam eder.', 'OCR_QUOTA');
-    const text = await ocr.transcribe(match[1], mode, lang);
+    if (!quota.affectedRows) throw new HttpError(429, 'Bugünkü el yazısı tanıma hakkın doldu (yarın yenilenir). Yazın korunuyor.', 'OCR_QUOTA');
+    let text;
+    try {
+      text = await ocr.transcribe(match[1], mode, lang);
+    } catch (error) {
+      // Tanınamayan (hizmet hatası, anahtar sorunu) istek günlük haktan düşülmez.
+      await pool.execute('UPDATE ocr_usage SET count=GREATEST(count-1,0) WHERE user_id=? AND day=?', [req.user.id, day]).catch(() => {});
+      throw error;
+    }
     res.json({text});
   });
 

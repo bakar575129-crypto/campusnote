@@ -102,3 +102,57 @@ test('Kalemlik AI: anahtar yoksa AI_DISABLED, ret durumunda anlaşılır hata, J
   assert.deepEqual(extractJson('önce {"b": "}"} sonra'), {b: '}'});
   assert.throws(() => extractJson('json yok'), e => e.code === 'AI_FORMAT');
 });
+
+import {createAnthropicClient, createWorkspaceResolver, discoverWorkspace, isWorkspaceError} from '../../server/anthropicClient.mjs';
+
+const WS_MESSAGE = 'This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace.';
+const wsError = () => new Anthropic.BadRequestError(400, {type: 'error', error: {type: 'invalid_request_error', message: WS_MESSAGE}}, WS_MESSAGE, new Headers());
+
+test('çalışma alanı: anthropic-workspace-id başlığı gerçekten gönderilir', async () => {
+  let headers;
+  const fetchImpl = async (url, init) => { headers = new Headers(init.headers); return new Response(JSON.stringify({id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5', content: [{type: 'text', text: 'ok'}], stop_reason: 'end_turn', usage: {input_tokens: 1, output_tokens: 1}}), {status: 200, headers: {'content-type': 'application/json'}}); };
+  await createAnthropicClient('sk-ant-x', {workspaceId: 'wrkspc_01Test', fetch: fetchImpl}).messages.create({model: 'claude-opus-5', max_tokens: 10, messages: [{role: 'user', content: 'x'}]});
+  assert.equal(headers.get('anthropic-workspace-id'), 'wrkspc_01Test');
+  assert.equal(headers.get('x-api-key'), 'sk-ant-x');
+  await createAnthropicClient('sk-ant-x', {fetch: fetchImpl}).messages.create({model: 'claude-opus-5', max_tokens: 10, messages: [{role: 'user', content: 'x'}]});
+  assert.equal(headers.get('anthropic-workspace-id'), null, 'kimlik yoksa başlık yok');
+});
+
+test('çalışma alanı hatası: anlaşılır Türkçe mesaj, panelden kimlik, otomatik bulma ve kaydetme', async () => {
+  assert.equal(isWorkspaceError(wsError()), true);
+  assert.equal(isWorkspaceError(new Error('invalid x-api-key')), false);
+  const e = explainProviderError(400, WS_MESSAGE);
+  assert.equal(e.code, 'OCR_WORKSPACE');
+  assert.match(e.message, /çalışma alanı/);
+  assert.doesNotMatch(e.message, /geçersiz/, '"anahtar geçersiz" denmez');
+
+  // Kimlik yoksa: hata anlaşılır bildirilir
+  const store = new Map();
+  const settings = {get: n => store.get(n) || '', set: async (n, v) => { store.set(n, v); }};
+  const seen = [];
+  const factory = (key, {workspaceId} = {}) => ({messages: {create: async () => { seen.push(workspaceId || ''); if (!workspaceId) throw wsError(); return {stop_reason: 'end_turn', content: [{type: 'text', text: 'merhaba'}]}; }}});
+  const noDiscover = createOcr({ocr: {apiKey: 'sk-ant-org', model: 'claude-opus-5', openaiKey: '', openaiModel: ''}}, {appSettings: settings, anthropicFactory: factory, workspace: createWorkspaceResolver({}, settings, async () => '')});
+  await assert.rejects(noDiscover.transcribe('AAAA', 'word'), err => err.code === 'OCR_WORKSPACE' && /Workspace ID/.test(err.message));
+
+  // Otomatik bulunursa aynı istek başlıkla tekrarlanır ve kimlik kaydedilir
+  seen.length = 0;
+  const ai = createAi({ocr: {apiKey: 'sk-ant-org', model: '', openaiKey: '', openaiModel: ''}, ai: {model: 'claude-haiku-4-5'}}, {appSettings: settings, anthropicFactory: factory, workspace: createWorkspaceResolver({}, settings, async () => 'wrkspc_Found')});
+  assert.equal((await ai.complete({system: '', messages: [{role: 'user', content: [{type: 'text', text: 'x'}]}]})).text, 'merhaba');
+  assert.deepEqual(seen, ['', 'wrkspc_Found']);
+  assert.equal(store.get('anthropic_workspace_id'), 'wrkspc_Found');
+  assert.equal(ai.status().workspaceId, 'wrkspc_Found');
+
+  // Panelde/ortamda kimlik varsa ilk istekten itibaren kullanılır
+  seen.length = 0;
+  const ocr = createOcr({ocr: {apiKey: 'sk-ant-org', model: 'claude-opus-5', openaiKey: '', openaiModel: ''}, anthropicWorkspaceId: 'wrkspc_Env'}, {anthropicFactory: factory});
+  assert.equal(await ocr.transcribe('AAAA', 'word'), 'merhaba');
+  assert.deepEqual(seen, ['wrkspc_Env']);
+});
+
+test('çalışma alanı bulma: tek çalışma alanı ya da "Default"; yetki yoksa boş', async () => {
+  const lister = items => () => ({beta: {organization: {workspaces: {list: () => (async function* () { yield* items; })()}}}});
+  assert.equal(await discoverWorkspace('k', lister([{id: 'wrkspc_A', name: 'Proje', archived_at: null}])), 'wrkspc_A');
+  assert.equal(await discoverWorkspace('k', lister([{id: 'wrkspc_A', name: 'Proje', archived_at: null}, {id: 'wrkspc_B', name: 'Default Workspace', archived_at: null}])), 'wrkspc_B');
+  assert.equal(await discoverWorkspace('k', lister([{id: 'wrkspc_A', name: 'A', archived_at: null}, {id: 'wrkspc_B', name: 'B', archived_at: null}])), '');
+  assert.equal(await discoverWorkspace('k', () => ({beta: {organization: {workspaces: {list: () => { throw new Error('403'); }}}}})), '');
+});

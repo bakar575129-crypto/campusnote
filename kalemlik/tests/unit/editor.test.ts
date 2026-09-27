@@ -36,6 +36,11 @@ test('satır ayırma', () => {
   const lines = splitLines(a, g);
   assert.equal(lines.length, 2);
   assert.equal(lines[0].length, 3);
+  // Satır aralığından iri yazılmış tek kelime (büyük harf, kuyruklu y) tek satır kalır
+  const big = [letter(100, 400, 30, 60), letter(135, 400, 25, 28), {...letter(165, 440, 25, 70)}, letter(195, 400, 25, 30)];
+  assert.equal(splitLines(big, g).length, 1);
+  // İri yazıda da iki ayrı satır ayrılır
+  assert.equal(splitLines([...big, letter(100, 520, 30, 40), letter(135, 520, 30, 40)], g).length, 2);
 });
 
 test('yazı olmayan çizimlere dokunulmaz', () => {

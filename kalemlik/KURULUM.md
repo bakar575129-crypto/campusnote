@@ -81,6 +81,8 @@ Siteyi açıp **Kayıt ol** ile ilk hesabı oluşturun — ilk hesap otomatik ol
 - Veya `.env`: `ANTHROPIC_API_KEY=sk-ant-...` ya da `OPENAI_API_KEY=sk-...` (sonra uygulamayı **Restart** edin).
 Anahtar yalnızca sunucuda kalır. Kullanıcı başına günlük sunucu tanıma sınırı plandaki "günlük tanıma hakkı"dır; sınır dolunca tanıma cihazda sürer.
 
+**"This API key is not scoped to a workspace" hatası:** Anahtarınız bir Claude çalışma alanına bağlı değil. İki çözüm: (1) Claude Console → **API Keys** → **Create Key** ile bir çalışma alanı (ör. *Default*) seçerek yeni anahtar oluşturup Yönetim → Sistem'e girin; ya da (2) Console → **Settings → Workspaces**'ten çalışma alanını açıp adres çubuğundaki `wrkspc_…` kimliğini Yönetim → Sistem → **Çalışma alanı kimliği** alanına yapıştırın (veya `.env`: `ANTHROPIC_WORKSPACE_ID=wrkspc_…`). Sonra **Bağlantıyı test et**.
+
 **Kalemlik AI (asistan, AI flashcard/quiz/plan, özet):** Aynı anahtar kullanılır (Yönetim → Sistem ya da `.env`: `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`; model için `AI_MODEL`, `OPENAI_AI_MODEL`). Anahtar yoksa AI sohbeti kapalıdır; flashcard, quiz ve çalışma planı kural tabanlı üretilir. Günlük AI hakkı plan başına Yönetim → Planlar'dan ayarlanır.
 
 **Ders kaydını sunucuda metne çevirme:** `OPENAI_API_KEY` gerekir (Whisper). Ses dosyası sınırı `MAX_AUDIO_MB` (varsayılan 200; metne çevirme için tek dosya en fazla 25 MB). Anahtar yoksa tarayıcının canlı transkripti kullanılabilir.
@@ -114,7 +116,7 @@ Adım adım ve ekran adlarıyla: **[GUNCELLEME.md](GUNCELLEME.md)** (yalnızca d
 1. Uygulamayı cPanel'den **Stop** edin.
 2. `.env` ve `storage/` klasörünü **koruyarak** yeni paketteki dosyaları üzerine kopyalayın (`dist/`, `server/`, `sql/`, `scripts/`, `shared/`, `package*.json`, `app.js`).
 3. `npm ci --omit=dev` → **Restart**. Veritabanı güncellemeleri sunucu açılırken otomatik uygulanır (isterseniz `npm run db:migrate` ile elle de çalıştırabilirsiniz).
-4. Doğrulama: tarayıcıda `https://alan-adiniz/api/health` adresini açın; `"version"` yeni paketin sürümünü (ör. `1.2.0`) göstermelidir. Eski sürüm görünüyorsa uygulama yeniden başlatılmamıştır — cPanel'de **Restart** edin. Açık kalmış tablet/telefon uygulamaları, sunucu güncellenince kendini yeniler.
+4. Doğrulama: tarayıcıda `https://alan-adiniz/api/health` adresini açın; `"version"` yeni paketin sürümünü (ör. `1.2.1`) göstermelidir. Eski sürüm görünüyorsa uygulama yeniden başlatılmamıştır — cPanel'de **Restart** edin. Açık kalmış tablet/telefon uygulamaları, sunucu güncellenince kendini yeniler.
 
 ## 11. Yedekleme
 

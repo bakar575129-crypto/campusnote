@@ -4,6 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {HttpError} from './errors.mjs';
 import {detectProvider, explainProviderError} from './ocr.mjs';
+import {createAnthropicClient, createWorkspaceResolver, isWorkspaceError} from './anthropicClient.mjs';
 
 /** Yapılandırılan model hesapta yoksa sırayla denenecek Claude modelleri. */
 const ANTHROPIC_FALLBACK_MODELS = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
@@ -23,7 +24,7 @@ function aiError(status, message, detail) {
 /**
  * @param {{ocr:{apiKey:string,model:string,openaiKey:string,openaiModel:string}, ai?:{model?:string, openaiModel?:string}}} config
  */
-export function createAi(config, {appSettings, fetchImpl = fetch, anthropicFactory = key => new Anthropic({apiKey: key, maxRetries: 1, timeout: 150_000})} = {}) {
+export function createAi(config, {appSettings, fetchImpl = fetch, anthropicFactory = (key, opts) => createAnthropicClient(key, {...opts, timeout: 150_000}), workspace = createWorkspaceResolver(config, appSettings)} = {}) {
   const current = () => {
     const key = appSettings?.get('ai_api_key') || appSettings?.get('ocr_api_key') || config.ocr.apiKey || config.ocr.openaiKey || '';
     const provider = detectProvider(key);
@@ -40,7 +41,8 @@ export function createAi(config, {appSettings, fetchImpl = fetch, anthropicFacto
     : {type: 'text', text: c.text});
 
   async function viaAnthropic(key, model, {system, messages, maxTokens, effort}) {
-    const client = anthropicFactory(key);
+    let workspaceId = workspace.get();
+    let client = anthropicFactory(key, {workspaceId});
     const models = [model, ...ANTHROPIC_FALLBACK_MODELS.filter(m => m !== model)];
     let last;
     for (const m of models) {
@@ -68,6 +70,11 @@ export function createAi(config, {appSettings, fetchImpl = fetch, anthropicFacto
       } catch (error) {
         if (error instanceof HttpError) throw error;
         if (error instanceof Anthropic.NotFoundError) { last = error; continue; } // model yok → sıradaki model
+        if (error instanceof Anthropic.APIError && isWorkspaceError(error) && !workspaceId) {
+          // Anahtar bir çalışma alanına bağlı değil: kimlik bulunabilirse aynı istek bir kez daha denenir.
+          workspaceId = await workspace.recover(key);
+          if (workspaceId) { client = anthropicFactory(key, {workspaceId}); models.splice(models.indexOf(m) + 1, 0, m); continue; }
+        }
         if (error instanceof Anthropic.APIError) throw aiError(error.status, error.message);
         throw aiError(0, error?.message || 'bağlantı hatası', `Bağlantı kurulamadı: ${error?.message || error}`);
       }
@@ -103,7 +110,8 @@ export function createAi(config, {appSettings, fetchImpl = fetch, anthropicFacto
 
   return {
     get configured() { return !!current().key; },
-    status() { const c = current(); return {configured: !!c.key, provider: c.provider, model: c.model, modelOverride: c.override, lastError}; },
+    status() { const c = current(); return {configured: !!c.key, provider: c.provider, model: c.model, modelOverride: c.override, workspaceId: workspace.get(), lastError}; },
+    clearError() { lastError = null; workspace.reset(); },
     /**
      * @param {{system:string, messages:{role:'user'|'assistant', content:({type:'text',text:string}|{type:'image',mediaType:string,data:string})[]}[], maxTokens?:number, effort?:'low'|'medium'|'high'}} req
      */

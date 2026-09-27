@@ -1,6 +1,6 @@
 {
   "name": "kalemlik",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Kalemlik — üniversite öğrencileri için dijital defter, planlayıcı ve odaklanma platformu",
   "type": "module",

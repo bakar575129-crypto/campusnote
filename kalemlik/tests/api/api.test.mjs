@@ -2,6 +2,7 @@
 // Gerekli: TEST_DB_NAME, TEST_DB_USER, TEST_DB_PASSWORD (boş bir test veritabanı; tablolar silinip yeniden kurulur).
 import {test, before, after} from 'node:test';
 import assert from 'node:assert/strict';
+import {HttpError} from '../../server/errors.mjs';
 import {randomUUID} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -19,7 +20,7 @@ const env = {
 };
 const config = readConfig(env);
 let pool, server, base;
-const fakeOcr = {configured: true, status: () => ({configured: true, provider: 'anthropic', model: 'test', keyHint: '…test', lastError: null}), async transcribe() { return 'merhaba dünya'; }};
+const fakeOcr = {configured: true, status: () => ({configured: true, provider: 'anthropic', model: 'test', keyHint: '…test', lastError: null}), async transcribe(b64, mode, lang) { if (lang === 'en') throw new HttpError(503, 'API anahtarı bir çalışma alanına (workspace) bağlı değil. Yazın korunuyor.', 'OCR_WORKSPACE'); return 'merhaba dünya'; }};
 const aiCalls = [];
 const fakeAi = {
   configured: true,
@@ -294,6 +295,14 @@ test('şifre değiştirme, sıfırlama ve OCR', async () => {
   assert.equal(r.body.text, 'merhaba dünya');
   r = await b('POST', '/api/ocr', {image: 'javascript:alert(1)'});
   assert.equal(r.status, 400);
+  // Tanıma hizmeti hata verirse (ör. anahtar/çalışma alanı sorunu) günlük haktan düşülmez
+  const me = (await b('GET', '/api/auth/me')).body.user.id;
+  const used = async () => Number((await pool.execute('SELECT count FROM ocr_usage WHERE user_id=?', [me]))[0][0]?.count || 0);
+  const before = await used();
+  r = await b('POST', '/api/ocr', {image: 'data:image/png;base64,' + PNG.toString('base64'), mode: 'word', lang: 'en'});
+  assert.equal(r.status, 503);
+  assert.equal(r.body.code, 'OCR_WORKSPACE');
+  assert.equal(await used(), before, 'başarısız tanıma hakkı iade edilir');
 });
 
 test('yönetim paneli: abonelik, ek depolama/defter hakkı, şifre sıfırlama, hesap kapatma', async () => {

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {HttpError} from './errors.mjs';
+import {createAnthropicClient, createWorkspaceResolver, isWorkspaceError} from './anthropicClient.mjs';
 
 // Tanıma kuralları: yazılanı harfi harfine metne dök. Kelime tahmin etme, imla düzeltme, eşanlamlı koyma yok.
 const VERBATIM = 'Transcribe letter by letter exactly what is written. Never correct spelling or grammar, never replace a word with a more common or similar-looking dictionary word (for example "mitoz" must stay "mitoz", not "motor"), never complete, translate, rephrase or summarize. Technical terms, Latin names, chemical names, formulas, abbreviations and unusual words must be copied exactly as written. Keep Turkish characters exactly (ç Ç ğ Ğ ı I i İ ö Ö ş Ş ü Ü; note that dotless ı and dotted i are different letters), digits, math symbols (+ − × ÷ = < > ≤ ≥ √ π ∑ ∫ ^), punctuation, parentheses, % and currency signs (₺ $ € £).';
@@ -23,6 +24,7 @@ export function detectProvider(key) {
 /** Sağlayıcı hatasını kullanıcıya/yöneticiye anlaşılır Türkçe açıklamaya çevirir. */
 export function explainProviderError(status, message = '') {
   const m = String(message).toLowerCase();
+  if (isWorkspaceError(message)) return {status: 503, code: 'OCR_WORKSPACE', message: 'API anahtarı bir çalışma alanına (workspace) bağlı değil. Yönetim → Sistem’de “Çalışma alanı kimliği (Workspace ID)” alanına wrkspc_ ile başlayan kimliği girin ya da Claude Console’da bir çalışma alanı seçerek yeni bir API anahtarı oluşturun.'};
   if (status === 401 || m.includes('api key') || m.includes('x-api-key') || m.includes('authentication')) return {status: 503, code: 'OCR_AUTH', message: 'Tanıma hizmetinin API anahtarı geçersiz. Yönetim panelinden anahtarı kontrol edin.'};
   if (m.includes('credit') || m.includes('billing') || m.includes('quota') || m.includes('insufficient') || status === 402) return {status: 503, code: 'OCR_BILLING', message: 'Tanıma hizmeti hesabında kredi/bakiye yok. Sağlayıcı hesabına bakiye eklenmeli.'};
   if (status === 404 || m.includes('model')) return {status: 503, code: 'OCR_MODEL', message: 'Seçilen tanıma modeli bu API hesabında kullanılamıyor.'};
@@ -42,7 +44,7 @@ function fail(status, message, detail) {
  * El yazısı görüntüsünü metne çevirir. Anahtar yalnızca sunucuda tutulur (ortam değişkeni ya da yönetim paneli).
  * Görüntüdeki yazı güvenilmeyen veri olarak ele alınır (yalnızca yazıya dökülür, talimat olarak izlenmez).
  */
-export function createOcr(config, {appSettings, fetchImpl = fetch, anthropicFactory = key => new Anthropic({apiKey: key, maxRetries: 1, timeout: 45_000})} = {}) {
+export function createOcr(config, {appSettings, fetchImpl = fetch, anthropicFactory = (key, opts) => createAnthropicClient(key, {...opts, timeout: 45_000}), workspace = createWorkspaceResolver(config, appSettings)} = {}) {
   const current = () => {
     const key = appSettings?.get('ocr_api_key') || config.ocr.apiKey || config.ocr.openaiKey || '';
     const provider = detectProvider(key);
@@ -55,7 +57,8 @@ export function createOcr(config, {appSettings, fetchImpl = fetch, anthropicFact
   let lastError = null;
 
   async function viaAnthropic(key, model, base64, mode, lang) {
-    const client = anthropicFactory(key);
+    let workspaceId = workspace.get();
+    let client = anthropicFactory(key, {workspaceId});
     const models = [model, ...ANTHROPIC_FALLBACK_MODELS.filter(m => m !== model)];
     let last;
     for (const m of models) {
@@ -74,6 +77,11 @@ export function createOcr(config, {appSettings, fetchImpl = fetch, anthropicFact
       } catch (error) {
         if (error instanceof HttpError) throw error;
         if (error instanceof Anthropic.NotFoundError) { last = error; continue; } // model yok → sıradaki model
+        if (error instanceof Anthropic.APIError && isWorkspaceError(error) && !workspaceId) {
+          // Anahtar bir çalışma alanına bağlı değil: kimlik bulunabilirse aynı istek bir kez daha denenir.
+          workspaceId = await workspace.recover(key);
+          if (workspaceId) { client = anthropicFactory(key, {workspaceId}); models.splice(models.indexOf(m) + 1, 0, m); continue; }
+        }
         if (error instanceof Anthropic.APIError) throw fail(error.status, error.message);
         throw fail(0, error?.message || 'bağlantı hatası', `Bağlantı kurulamadı: ${error?.message || error}`);
       }
@@ -103,7 +111,8 @@ export function createOcr(config, {appSettings, fetchImpl = fetch, anthropicFact
 
   return {
     get configured() { return !!current().key; },
-    status() { const c = current(); return {configured: !!c.key, provider: c.provider, model: c.model, modelOverride: c.override, keyHint: c.key ? '…' + c.key.slice(-4) : '', lastError}; },
+    status() { const c = current(); return {configured: !!c.key, provider: c.provider, model: c.model, modelOverride: c.override, keyHint: c.key ? '…' + c.key.slice(-4) : '', workspaceId: workspace.get(), lastError}; },
+    clearError() { lastError = null; workspace.reset(); },
     async transcribe(base64Png, mode = 'block', lang = 'tr') {
       const {key, provider, model} = current();
       if (!key) throw new HttpError(503, 'El yazısı tanıma bu sunucuda etkin değil. Yazın korunuyor.', 'OCR_DISABLED');

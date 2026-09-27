@@ -13,7 +13,7 @@ interface PlanFeatures {aiFlashcards: boolean; aiQuiz: boolean; aiPlan: boolean;
 interface AdminPlan {id: string; name: string; storageMb: number; notebookLimit: number; ocrDailyLimit: number; aiDailyLimit: number; features: PlanFeatures; priceMonthly: number; currency: string; active: boolean}
 const FEATURE_LABELS: [keyof PlanFeatures, string][] = [['aiFlashcards', 'AI flashcard'], ['aiQuiz', 'AI quiz'], ['aiPlan', 'AI çalışma planı'], ['transcription', 'Sunucuda ses → metin'], ['premiumTemplates', 'Premium şablonlar'], ['collaboration', 'Ortak defter']];
 interface Stats {users: {total: number; newThisWeek: number; activeThisWeek: number}; storageBytes: number; fileCount: number; notebooks: number; pages: number; subscriptions: {planId: string; count: number}[]}
-interface SystemInfo {ai: null | {configured: boolean; provider: string | null; model: string; modelOverride: string; lastError: null | {at: number; code: string; detail: string}}; ocr: {configured: boolean; provider: string | null; model: string; modelOverride: string; keyHint: string; lastError: null | {at: number; code: string; detail: string}}; mail: {configured: boolean; from: string}; version: string; registrationOpen: boolean}
+interface SystemInfo {ai: null | {configured: boolean; provider: string | null; model: string; modelOverride: string; workspaceId?: string; lastError: null | {at: number; code: string; detail: string}}; ocr: {configured: boolean; provider: string | null; model: string; modelOverride: string; keyHint: string; workspaceId?: string; lastError: null | {at: number; code: string; detail: string}}; mail: {configured: boolean; from: string}; version: string; registrationOpen: boolean}
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'İşlem yapılamadı.');
 
@@ -184,10 +184,11 @@ function SystemTab() {
   const [key, setKey] = useState('');
   const [model, setModel] = useState('');
   const [aiModel, setAiModel] = useState('');
+  const [workspace, setWorkspace] = useState('');
   const [aiTest, setAiTest] = useState<{ok: boolean; ms: number; error?: string; detail?: string} | null>(null);
   const [busy, setBusy] = useState('');
   const [test, setTest] = useState<{ok: boolean; ms: number; text?: string; error?: string; detail?: string} | null>(null);
-  const load = async () => { try { const i = await api<SystemInfo>('/api/admin/system'); setInfo(i); setModel(i.ocr.modelOverride || ''); setAiModel(i.ai?.modelOverride || ''); } catch (e) { toast(msg(e), 'error'); } };
+  const load = async () => { try { const i = await api<SystemInfo>('/api/admin/system'); setInfo(i); setModel(i.ocr.modelOverride || ''); setAiModel(i.ai?.modelOverride || ''); setWorkspace(i.ocr.workspaceId || ''); } catch (e) { toast(msg(e), 'error'); } };
   useEffect(() => { void load(); }, []);
   if (!info) return <p className="muted">Yükleniyor…</p>;
   const save = async (body: Record<string, string>) => {
@@ -198,7 +199,7 @@ function SystemTab() {
     <div className="stack">
       <section className="card card-pad settings-section">
         <h2><ScanText size={20} /> El yazısı tanıma ve AI anahtarı</h2>
-        <p className="muted small">API anahtarı olmadan da tanıma <b>cihazda</b> çalışır (internetsiz, ücretsiz). Anahtar girersen önce sunucudaki yapay zekâ tanıması denenir; daha dağınık el yazısında daha isabetlidir. Anthropic (<code>sk-ant-…</code>) veya OpenAI (<code>sk-…</code>) anahtarı kabul edilir; anahtar yalnızca sunucuda saklanır.</p>
+        <p className="muted small">API anahtarı olmadan tanıma <b>cihazda</b> çalışır (internetsiz, ücretsiz; düzgün el yazısında). Anahtar girersen yazılar sunucudaki yapay zekâyla okunur — Türkçe el yazısında çok daha isabetlidir. Sunucuya ulaşılamazsa tahmin yürütülmez, öğrencinin el yazısı olduğu gibi kalır. Anthropic (<code>sk-ant-…</code>) veya OpenAI (<code>sk-…</code>) anahtarı kabul edilir; anahtar yalnızca sunucuda saklanır.</p>
         <div className="row wrap">
           <Badge tone={info.ocr.configured ? 'success' : 'neutral'}>{info.ocr.configured ? `Sunucu tanıması açık · ${info.ocr.provider === 'openai' ? 'OpenAI' : 'Anthropic'} ${info.ocr.keyHint}` : 'Sunucu tanıması kapalı · cihazda tanıma kullanılıyor'}</Badge>
           {info.ocr.configured && <span className="muted small">Model: {info.ocr.model}</span>}
@@ -208,8 +209,13 @@ function SystemTab() {
           <Field label="API anahtarı" htmlFor="sys-key" hint="Boş bırakıp kaydedersen panelden girilen anahtar silinir (.env'deki anahtar varsa o kullanılır)."><input id="sys-key" className="input" type="password" autoComplete="off" placeholder={info.ocr.keyHint ? `Kayıtlı: ${info.ocr.keyHint}` : 'sk-ant-… veya sk-…'} value={key} onChange={e => setKey(e.target.value)} /></Field>
           <Field label="Model (isteğe bağlı)" htmlFor="sys-model" hint="Boşsa varsayılan kullanılır. Hesabında olmayan Claude modelinde otomatik olarak başka modele geçilir."><input id="sys-model" className="input" value={model} placeholder={info.ocr.model || 'varsayılan'} onChange={e => setModel(e.target.value)} /></Field>
         </div>
+        {info.ocr.provider !== 'openai' && (
+          <Field label="Çalışma alanı kimliği (Workspace ID, isteğe bağlı)" htmlFor="sys-ws" hint={<>Yalnızca “API key is not scoped to a workspace” hatasında gerekir. Claude Console → Settings → Workspaces’te çalışma alanını açın; adres çubuğundaki <code>wrkspc_…</code> kimliğini buraya yapıştırın. Daha kolayı: Console → API Keys → <b>Create Key</b> ile bir çalışma alanı (ör. Default) seçerek yeni anahtar oluşturup yukarıya girmek.</>}>
+            <input id="sys-ws" className="input" autoComplete="off" spellCheck={false} placeholder="wrkspc_…" value={workspace} onChange={e => setWorkspace(e.target.value.trim())} />
+          </Field>
+        )}
         <div className="row wrap">
-          <Button variant="primary" busy={busy === 'save'} onClick={() => void save({...(key ? {ocrApiKey: key} : {}), ocrModel: model})}>Kaydet</Button>
+          <Button variant="primary" busy={busy === 'save'} onClick={() => void save({...(key ? {ocrApiKey: key} : {}), ocrModel: model, ...(info.ocr.provider !== 'openai' ? {workspaceId: workspace} : {})})}>Kaydet</Button>
           {info.ocr.keyHint && <Button variant="ghost" onClick={() => void save({ocrApiKey: ''})}>Paneldeki anahtarı sil</Button>}
           <Button icon={<RefreshCw size={16} />} busy={busy === 'test'} disabled={!info.ocr.configured} onClick={async () => { setBusy('test'); try { setTest(await api('/api/admin/system/ocr-test', {method: 'POST'})); await load(); } catch (e) { toast(msg(e), 'error'); } finally { setBusy(''); } }}>Bağlantıyı test et</Button>
         </div>

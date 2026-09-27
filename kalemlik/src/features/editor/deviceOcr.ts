@@ -28,7 +28,8 @@ function getWorker(onProgress?: (p: number) => void) {
 /** Tanıma motorunu önceden hazırlar (ilk kullanımda dil verisi indirilip cihazda saklanır). */
 export function warmDeviceOcr() { if (deviceOcrSupported()) void getWorker().catch(() => {}); }
 
-export interface DeviceResult {text: string; confidence: number}
+/** confidence: bütün sonucun güveni; minWord: en az güvenilen kelimenin güveni (0–100). */
+export interface DeviceResult {text: string; confidence: number; minWord: number}
 
 /** Görüntüdeki el yazısını okur. confidence: 0–100 (düşükse sonuç güvenilmez). */
 export async function recognizeOnDevice(dataUrl: string, mode: 'word' | 'block'): Promise<DeviceResult> {
@@ -38,15 +39,17 @@ export async function recognizeOnDevice(dataUrl: string, mode: 'word' | 'block')
     await worker.setParameters({tessedit_pageseg_mode: want as Tesseract.PSM, preserve_interword_spaces: '1'});
     psm = want;
   }
-  const {data} = await worker.recognize(dataUrl);
+  const {data} = await worker.recognize(dataUrl, {}, {text: true, blocks: true});
   const text = data.text.replace(/[|_~^`]+/g, '').replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
-  return {text, confidence: data.confidence};
+  const words = (data.blocks || []).flatMap(b => b.paragraphs.flatMap(p => p.lines.flatMap(l => l.words))).filter(w => w.text.trim());
+  const minWord = words.length ? Math.min(...words.map(w => w.confidence)) : data.confidence;
+  return {text, confidence: data.confidence, minWord};
 }
 
 /** Metin gerçek bir yazı mı yoksa gürültü mü? (çok kısa/sembol ağırlıklı sonuçları eler) */
-export function plausibleText(r: DeviceResult, minConfidence = 62) {
+export function plausibleText(r: DeviceResult, minConfidence = 62, minWord = 0) {
   const letters = (r.text.match(/[\p{L}\p{N}]/gu) || []).length;
-  return r.confidence >= minConfidence && letters >= 1 && letters / Math.max(1, r.text.replace(/\s/g, '').length) >= 0.6;
+  return r.confidence >= minConfidence && (r.minWord ?? r.confidence) >= minWord && letters >= 1 && letters / Math.max(1, r.text.replace(/\s/g, '').length) >= 0.6;
 }
 
 // Tanılama: "klm:debug" açıkken konsoldan/testten doğrudan denenebilir.

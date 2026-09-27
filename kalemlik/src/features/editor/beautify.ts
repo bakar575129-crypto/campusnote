@@ -61,9 +61,14 @@ export function inkMetrics(strokes: Stroke[]) {
 /** Dikey konuma göre satırlara ayırır (üstten alta). */
 export function splitLines(strokes: Stroke[], gap: number): Stroke[][] {
   const items = strokes.map(s => ({s, c: center(strokeBox(s))})).sort((a, b) => a.c - b.c);
+  // Satır çizgisinden büyük yazılmış yazıda (ya da uzun kuyruklu y, g, ş gibi harflerde) harfler satırlara
+  // bölünmesin: eşik, sayfanın satır aralığı ile yazının kendi harf yüksekliğinden büyük olanına göre seçilir.
+  const heights = strokes.map(s => strokeBox(s).h).sort((a, b) => a - b);
+  const typical = heights[Math.floor(heights.length / 2)] || 0;
+  const threshold = Math.max(gap * 0.6, typical * 0.8);
   const lines: {c: number; list: Stroke[]}[] = [];
   for (const it of items) {
-    const line = lines.find(l => Math.abs(l.c - it.c) < gap * 0.6);
+    const line = lines.find(l => Math.abs(l.c - it.c) < threshold);
     if (line) { line.list.push(it.s); line.c = line.list.reduce((n, s) => n + center(strokeBox(s)), 0) / line.list.length; }
     else lines.push({c: it.c, list: [it.s]});
   }
@@ -150,7 +155,10 @@ export function placeText(all: Stroke[], groupIds: string[], content: PageConten
 export function strokesToPng(strokes: Stroke[], draw: (ctx: CanvasRenderingContext2D, s: Stroke) => void): string | null {
   const b = inkBox(strokes);
   if (!b) return null;
-  const pad = 16, scale = Math.min(3, 900 / Math.max(b.w, b.h, 1), Math.max(1, 64 / Math.max(b.h, 1)));
+  // Yazı, tanıma motorunun en iyi okuduğu boyuta (yaklaşık 90 px yükseklik) getirilir. Çok yakınlaştırılmış
+  // ekranda yazılan kelime kâğıtta küçük kalır; bu yüzden büyütme 10 kata kadar çıkabilir.
+  const scale = Math.max(0.5, Math.min(10, 90 / Math.max(b.h, 1), 1800 / Math.max(b.w, 1)));
+  const pad = Math.max(24 / scale, b.h * 0.25);
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil((b.w + pad * 2) * scale);
   canvas.height = Math.ceil((b.h + pad * 2) * scale);
@@ -158,6 +166,8 @@ export function strokesToPng(strokes: Stroke[], draw: (ctx: CanvasRenderingConte
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(scale, 0, 0, scale, (pad - b.x) * scale, (pad - b.y) * scale);
-  for (const s of strokes) draw(ctx, {...s, c: '#000000', o: 1});
+  // Çizgi kalınlığı görüntüde okunur kalsın (çok ince kalemde harfler kopuk görünmesin, çok kalında harfler dolmasın).
+  const width = (w: number) => Math.min(Math.max(w, 3 / scale), Math.max(3 / scale, b.h * 0.12));
+  for (const s of strokes) draw(ctx, {...s, c: '#000000', o: 1, w: width(s.w)});
   return canvas.toDataURL('image/png');
 }

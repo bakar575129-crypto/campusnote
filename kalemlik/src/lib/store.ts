@@ -589,3 +589,6 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSync(300); });
   setInterval(() => { if (userId && document.visibilityState === 'visible') void syncNow(); }, 60000);
 }
+
+// Tanılama: "klm:debug" açıkken testler cihazdaki kaydı doğrudan okuyabilir (eşitlemeyi beklemeden).
+try { if (localStorage.getItem('klm:debug')) (window as unknown as Record<string, unknown>).__klmGet = get; } catch { /* yok */ }

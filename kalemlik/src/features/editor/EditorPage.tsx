@@ -29,7 +29,7 @@ import {TemplatePanel, ToolRail, ViewPanel, WritePanel} from './Panels';
 import {PagesPanel} from './PagesPanel';
 import {cleanRecognized, consistentWithInk, hoveringNear, looksLikeWriting, movedAway, placeText, splitLines, strokesToPng} from './beautify';
 import {drawStroke} from './ink';
-import {inkBox, transformStroke} from './geometry';
+import {inkBox, transformStroke, type Box} from './geometry';
 import {writingGuide} from './paper';
 import type {Selection, Tool, View} from './types';
 import {emptySelection, hasSelection} from './types';
@@ -264,22 +264,40 @@ export default function EditorPage({id}: {id: string}) {
     const image = strokesToPng(strokes, (ctx, s) => drawStroke(ctx, s));
     if (!image) return {error: ''};
     let serverError = '';
-    if (engine !== 'device' && config?.ocrEnabled && navigator.onLine) {
+    const server = engine !== 'device' && !!config?.ocrEnabled;
+    if (server) {
+      if (!navigator.onLine) return {error: 'İnternet bağlantısı yok.'};
       try {
         const {text} = await api<{text: string}>('/api/ocr', {method: 'POST', json: {image, mode, lang}});
         if (text.trim()) return {text};
-      } catch (e) { serverError = e instanceof Error ? e.message.replace(/ Yazın korunuyor\.?$/, '') : ''; }
+        return {error: ''}; // sunucu "okunamadı" dedi: cihazda tahmin yürütülmez
+      } catch (e) { serverError = e instanceof Error ? e.message.replace(/ Yazın korunuyor\.?$/, '') : 'Yazı tanınamadı.'; }
+      // Kelimeyi yazı tipine çevirirken sunucu (daha isabetli) kullanılamadıysa cihazdaki motorla tahmin yürütülmez:
+      // cihazda tanıma el yazısında sık yanılır ve yanlış kelime yazmaktansa el yazısını korumak doğrudur.
+      if (mode === 'word') return {error: serverError};
     }
     if (deviceOcrSupported()) {
       try {
         const r = await recognizeOnDevice(image, mode);
-        if (plausibleText(r)) return {text: r.text};
-        return {error: 'Yazı cihazda yeterince net okunamadı.'};
+        // Cihazda tanıma el yazısında daha az isabetlidir: kelimeye dönüştürürken yalnızca çok emin olduğu sonucu kabul eder.
+        if (mode === 'word' ? plausibleText(r, 70, 55) : plausibleText(r)) return {text: r.text};
+        return {error: serverError || 'Yazı cihazda yeterince net okunamadı.'};
       } catch { /* cihazda tanıma yüklenemedi */ }
     }
     return {error: serverError || 'Yazı tanınamadı.'};
   }, [config?.ocrEnabled]);
   const lastNotice = useRef(0);
+
+  // Akıllı Yazı Güzelleştirme durumu:
+  //  • pending: yazılmakta olan kelimenin çizgileri
+  //  • inflight: tanımaya gönderilmiş (sonucu bekleniyor) kelime — kullanıcı devam ederse sonucu atılır
+  //  • recent: az önce dönüştürülen ya da okunamayan kelime — hemen yanına yazılırsa kelime yeniden açılır ve
+  //    bütün hâlde tanınır ("B" + "en" → "Ben"; sonradan eklenen nokta/şapka da kelimeye katılır)
+  //  • gaps: kelime içindeki duraksamalar (ms); yavaş yazan kullanıcıda bekleme süresi buna göre uzar
+  const lastUp = useRef(0);
+  const gaps = useRef<number[]>([]);
+  const inflight = useRef<{pageId: string; ids: string[]; box: Box; gap: number; cancelled: boolean} | null>(null);
+  const recent = useRef<{pageId: string; ids: string[]; originals: Stroke[]; textId: string | null; box: Box; gap: number; at: number} | null>(null);
 
   /** Bekleyen yazının kutusu (kelime bitti mi / kalem yakında mı hesapları için). */
   const pendingBox = () => {
@@ -287,6 +305,12 @@ export default function EditorPage({id}: {id: string}) {
     if (!cur || !pending.current.ids.length) return null;
     const ids = new Set(pending.current.ids);
     return {box: inkBox(cur.strokes.filter(st => ids.has(st.id))), gap: writingGuide(cur).gap};
+  };
+  const waitMs = () => {
+    const base = writeRef.current.delay;
+    const g = [...gaps.current].sort((a, b) => a - b);
+    const slow = g.length >= 3 ? g[Math.floor(g.length * 0.8)] * 1.6 : 0;
+    return Math.round(Math.min(base + 1200, Math.max(base, slow)));
   };
 
   const beautify = useCallback(async () => {
@@ -300,25 +324,33 @@ export default function EditorPage({id}: {id: string}) {
     const group = cur.strokes.filter(st => idSet.has(st.id));
     const guide = writingGuide(cur);
     if (!group.length || !looksLikeWriting(group, guide.gap)) return;
+    const job = {pageId, ids, box: inkBox(group)!, gap: guide.gap, cancelled: false};
+    inflight.current = job;
     setDimIds(prev => new Set([...prev, ...ids]));
     const lines = splitLines(group, guide.gap);
     const results = await Promise.all(lines.map(line => recognize(line, 'word', w.engine, w.lang)));
     setDimIds(prev => { const n = new Set(prev); for (const i of ids) n.delete(i); return n; });
+    if (inflight.current === job) inflight.current = null;
+    if (job.cancelled) return; // kullanıcı aynı kelimeye devam etti: kelime bütün hâlde yeniden tanınacak
     const now = latest(pageId)?.content;
     if (!now) return;
     let strokes = now.strokes;
     let failed = '';
+    let last: typeof recent.current = null;
     lines.forEach((line, i) => {
       const r = results[i];
       // Bu arada silinen/değiştirilen çizgiler dönüştürülmez.
       const lineIds = line.map(st => st.id);
       if (!lineIds.every(x => strokes.some(st => st.id === x))) return;
+      const box = inkBox(line)!;
+      last = {pageId, ids: lineIds, originals: line, textId: null, box, gap: guide.gap, at: Date.now()};
       if (!('text' in r)) { if (r.error) failed = r.error; return; }
       const text = cleanRecognized(r.text);
       if (!text || !consistentWithInk(text, line)) { failed = 'Yazı güvenle okunamadı.'; return; }
       const placed = placeText(strokes, lineIds, now, text, w.font);
-      if (placed) strokes = placed;
+      if (placed) { strokes = placed; last.textId = placed[placed.length - 1].id; }
     });
+    recent.current = last;
     // Her kelimede uyarı çıkmasın: en fazla dakikada bir bilgi verilir.
     if (failed && Date.now() - lastNotice.current > 60000) { lastNotice.current = Date.now(); toast(`${failed} El yazın olduğu gibi korundu.`, 'info'); }
     if (strokes !== now.strokes) commit({...now, strokes}, pageId);
@@ -326,21 +358,53 @@ export default function EditorPage({id}: {id: string}) {
 
   const restartTimer = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void beautify(), writeRef.current.delay);
-  }, [beautify]);
+    timer.current = setTimeout(() => void beautify(), waitMs());
+  }, [beautify]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Kullanıcı az önce tanımaya giden ya da dönüştürülen kelimenin devamını yazıyorsa kelimeyi yeniden açar. */
+  const reopenWord = (x: number, y: number) => {
+    if (!page) return false;
+    const f = inflight.current;
+    if (f && f.pageId === page.id && !movedAway(f.box, x, y, f.gap)) {
+      f.cancelled = true;
+      inflight.current = null;
+      setDimIds(prev => { const n = new Set(prev); for (const i of f.ids) n.delete(i); return n; });
+      pending.current = {pageId: f.pageId, ids: [...f.ids]};
+      return true;
+    }
+    const r = recent.current;
+    if (!r || r.pageId !== page.id || Date.now() - r.at > 4000 || movedAway(r.box, x, y, r.gap)) return false;
+    recent.current = null;
+    const cur = latest(r.pageId)?.content;
+    if (!cur) return false;
+    if (r.textId) {
+      // Yazı tipine dönüşmüş parça, kelimenin tamamı tanınana kadar yeniden el yazısı olur.
+      if (!cur.strokes.some(s => s.id === r.textId)) return false;
+      commit({...cur, strokes: cur.strokes.flatMap(s => (s.id === r.textId ? r.originals : [s]))}, r.pageId);
+    } else if (!r.ids.every(id => cur.strokes.some(s => s.id === id))) return false;
+    pending.current = {pageId: r.pageId, ids: [...r.ids]};
+    return true;
+  };
 
   const onPenStroke = useCallback((strokeId: string) => {
     if (writeRef.current.mode !== 'beautify' || !page) return;
     if (pending.current.pageId !== page.id) { void beautify(); pending.current = {pageId: page.id, ids: []}; }
     pending.current.ids.push(strokeId);
+    lastUp.current = Date.now();
     restartTimer();
   }, [page, beautify, restartTimer]);
   const onInputStart = useCallback((x: number, y: number, kind: string) => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    if (!pending.current.ids.length) return;
-    // Kalem başka bir yere (sonraki kelime, alt satır) ya da başka bir araca geçtiyse önceki kelime bitmiştir.
-    const p = pendingBox();
-    if (kind !== 'pen' || !p?.box || movedAway(p.box, x, y, p.gap)) void beautify();
+    if (writeRef.current.mode !== 'beautify') return;
+    const pause = Date.now() - lastUp.current;
+    if (pending.current.ids.length) {
+      // Kalem başka bir yere (sonraki kelime, alt satır) ya da başka bir araca geçtiyse önceki kelime bitmiştir.
+      const p = pendingBox();
+      if (kind !== 'pen' || !p?.box || movedAway(p.box, x, y, p.gap)) void beautify();
+      else if (pause < 3000) gaps.current = [...gaps.current.slice(-19), pause];
+      return;
+    }
+    if (kind === 'pen' && reopenWord(x, y) && pause < 6000) gaps.current = [...gaps.current.slice(-19), pause];
   }, [beautify]); // eslint-disable-line react-hooks/exhaustive-deps
   const onPenHover = useCallback((x: number, y: number) => {
     // Kalem kelimenin yanında havada duruyorsa kullanıcı yazmaya devam etmek üzere: süre yeniden başlar.
@@ -350,9 +414,9 @@ export default function EditorPage({id}: {id: string}) {
   }, [restartTimer]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   // Sayfa değişirse bekleyen kelime hemen dönüştürülür.
-  useEffect(() => { if (pending.current.ids.length) void beautify(); }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { recent.current = null; if (pending.current.ids.length) void beautify(); }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
   // Özellik kapatılırsa bekleyen iş bırakılır.
-  useEffect(() => { if (settings.write.mode !== 'beautify') { if (timer.current) clearTimeout(timer.current); timer.current = null; pending.current = {pageId: '', ids: []}; } }, [settings.write.mode]);
+  useEffect(() => { if (settings.write.mode !== 'beautify') { if (timer.current) clearTimeout(timer.current); timer.current = null; pending.current = {pageId: '', ids: []}; recent.current = null; if (inflight.current) inflight.current.cancelled = true; } }, [settings.write.mode]);
 
   // ------------------------------------------------------------ seçim işlemleri
   const selectedStrokes = () => content ? content.strokes.filter(s => selection.strokes.includes(s.id)) : [];

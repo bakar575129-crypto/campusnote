@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 export const ROOT = fileURLToPath(new URL('../', import.meta.url));
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 dotenv.config({path: path.join(ROOT, '.env'), quiet: true});
 
 function int(env, key, fallback, min, max) {
@@ -66,6 +66,8 @@ export function readConfig(env = process.env) {
       openaiKey: env.OPENAI_API_KEY || '',
       openaiModel: env.OPENAI_OCR_MODEL || 'gpt-4.1-mini',
     },
+    // Anahtar bir çalışma alanına bağlı değilse Anthropic'in istediği çalışma alanı kimliği (wrkspc_…).
+    anthropicWorkspaceId: (env.ANTHROPIC_WORKSPACE_ID || '').trim(),
     ai: {
       model: env.AI_MODEL || 'claude-opus-5',
       openaiModel: env.OPENAI_AI_MODEL || 'gpt-4.1',

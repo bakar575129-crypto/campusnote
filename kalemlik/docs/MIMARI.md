@@ -64,6 +64,13 @@ Bir çizgi (stroke) `{id, t: pen|shape|text, pen, c, w, o, pts: [x, y, basınç,
 - Hız sınırları: IP ve e-posta başına giriş, yükleme, OCR, şifre işlemleri (birden çok Node sürecinde tutarlı, veritabanı tabanlı) + süreç içi genel sınır.
 - Gizli anahtarlar (veritabanı, Anthropic, SMTP) yalnızca sunucudaki `.env` dosyasındadır.
 
+## 1.2.1 eklemeleri
+
+- **Kalem kâğıttayken gelen değişiklik:** `PageCanvas` bir işlem (çizim, silgi, şekil, taşıma) sürerken gelen sayfa güncellemesini `external` olarak saklar; işlem bitince `mergePage(başlangıç, kalemin sonucu, dışarıdan gelen)` ile birleştirir. Önceden işlem başındaki kopya üzerine yazılıyor ve eşzamansız dönüşümler (ve ortak defterde başkasının değişikliği) kayboluyordu.
+- **Güzelleştirme durumu (`EditorPage`):** `pending` (yazılan kelime), `inflight` (tanımada; devam edilirse sonucu atılır), `recent` (4 sn içinde yanına yazılırsa yeniden açılır; dönüşmüşse metin çizgisi özgün çizgilerle değiştirilir), `gaps` (kelime içi duraksamalar → bekleme süresi). Sunucu tanıması tanımlıysa kelime kipinde cihaz motoruna düşülmez.
+- **Tanıma görüntüsü:** yazı yaklaşık 90 px yüksekliğe ölçeklenir (10 kata kadar), çizgi kalınlığı okunur aralıkta tutulur.
+- **Anthropic çalışma alanı:** `server/anthropicClient.mjs` — `anthropic-workspace-id` başlığı (`defaultHeaders`), `app_settings.anthropic_workspace_id` / `ANTHROPIC_WORKSPACE_ID`; hata alınırsa kuruluş yetkili anahtarla çalışma alanları listelenip tekse ya da "Default" ise seçilir ve kaydedilir. OCR kotası başarısız tanımada iade edilir.
+
 ## 1.2.0 eklemeleri
 
 - **Akıllı Yazı Güzelleştirme:** `src/features/editor/beautify.ts` (dil kaydı `RECOGNITION_LANGS`, bekleme süreleri, kelime bitti mi, yerleştirme `placeText`, tanıma/mürekkep tutarlılığı). Eski `correctHandwriting` kaldırıldı; eski ayarlar `resolveWrite` ile "kapalı"ya taşınır. Sunucu tanıma istemi (`server/ocr.mjs`) harfi harfine yazdırır, düzeltme yaptırmaz.

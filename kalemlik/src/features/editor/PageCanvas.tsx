@@ -12,6 +12,7 @@ import {drawImageContain} from './render';
 import {eraseFrom, strokeBox, strokeInLasso, strokeInRect, transformStroke, unionBox, type Box} from './geometry';
 import type {Selection, Tool, View} from './types';
 import {onFontsLoaded} from '@/features/fonts/fonts';
+import {mergePage} from '@/lib/merge';
 
 export interface CanvasHandle {
   zoomBy(factor: number): void;
@@ -76,6 +77,9 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
   const gesture = useRef<{d0: number; mx: number; my: number; v0: View} | null>(null);
   const penSeen = useRef(0);
   const work = useRef<PageContent>(props.content);
+  // Kalem kâğıttayken dışarıdan gelen değişiklik (ör. önceki kelimenin yazı tipine dönüşmesi, ortak defterde başkasının
+  // yazdığı): işlem bitince kaybolmasın diye saklanır ve kalemin yaptığıyla birleştirilir.
+  const external = useRef<PageContent | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
   const [scale, setScale] = useState(1);
@@ -177,7 +181,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     }
   }, [scale, W, H]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const drawInk = useCallback((strokes: Stroke[] = work.current.strokes) => {
+  const drawInk = useCallback((strokes: Stroke[] = (external.current ?? work.current).strokes) => {
     const ctx = setupCanvas(inkRef.current);
     if (!ctx) return;
     const dim = propsRef.current.dimIds;
@@ -188,7 +192,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
   const liveCtx = () => setupCanvas(liveRef.current);
 
   useEffect(() => {
-    if (!action.current) work.current = props.content;
+    if (!action.current) { work.current = props.content; external.current = null; } else if (props.content !== work.current) external.current = props.content;
     drawBg();
     drawInk();
   }, [props.content, props.dimIds, drawBg, drawInk]);
@@ -200,7 +204,22 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     raf.current = requestAnimationFrame(fn);
   };
 
-  const commit = (next: PageContent) => { work.current = next; propsRef.current.onCommit(next); };
+  const commit = (next: PageContent) => {
+    // İşlem sürerken sayfa dışarıdan değiştiyse: işlemin başındaki hâl (work) → kalemin yaptığı (next) ve dışarıdan
+    // gelen (external) üç yönlü birleştirilir; ikisi de korunur.
+    const ext = external.current;
+    if (ext && ext !== work.current) next = mergePage(work.current, next, ext);
+    external.current = null;
+    work.current = next;
+    propsRef.current.onCommit(next);
+  };
+  /** İşlem bir şey kaydetmeden bittiyse, bu arada dışarıdan gelen değişiklik çalışma kopyasına alınır. */
+  const settleExternal = () => {
+    if (!external.current) return;
+    work.current = external.current;
+    external.current = null;
+    drawInk();
+  };
 
   // ------------------------------------------------------------ giriş
   const toPage = (clientX: number, clientY: number) => {
@@ -272,6 +291,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
     action.current = null;
     liveCtx();
     if (a?.type === 'erase' || a?.type === 'move' || a?.type === 'scale') { drawInk(); }
+    settleExternal();
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -522,6 +542,7 @@ export const PageCanvas = forwardRef<CanvasHandle, Props>(function PageCanvas(pr
       }
       case 'pan': break;
     }
+    settleExternal();
   };
 
   /** Yeni çizgiyi tüm katmanı yeniden çizmeden mürekkep tuvaline ekler (düşük gecikme). */
