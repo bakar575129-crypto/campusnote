@@ -16,8 +16,10 @@ import {createAppSettings} from './appSettings.mjs';
 import {createAi} from './ai.mjs';
 import {createAiRouter} from './aiRoutes.mjs';
 import {createSearch} from './search.mjs';
+import {createTranscribe} from './transcribe.mjs';
+import {createWidget} from './widget.mjs';
 
-const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai', '/ara', '/notlarim'];
+const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai', '/ara', '/notlarim', '/kayitlar', '/kayitlar/:id', '/gunluk', '/widget'];
 
 export function createApp({pool, config, appSettings = createAppSettings(pool), ocr = createOcr(config, {appSettings}), ai = createAi(config, {appSettings}), mailer = createMailer(config)}) {
   void appSettings.refresh();
@@ -34,6 +36,8 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
         scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
+        // Ders kayıtları: cihazdaki (blob) ya da sunucudaki ses dosyası oynatılır.
+        mediaSrc: ["'self'", 'blob:'],
         fontSrc: ["'self'", 'data:', 'blob:'],
         connectSrc: ["'self'", 'blob:'],
         workerSrc: ["'self'", 'blob:'],
@@ -89,6 +93,8 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
   app.use('/api/admin', createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink: auth.createResetLink}));
   app.use('/api/ai', createAiRouter({pool, ai}));
   app.use('/api', createSearch({pool}));
+  app.use('/api', createTranscribe({pool, config, appSettings}));
+  app.use('/api', createWidget({pool}));
 
   app.post('/api/ocr', async (req, res) => {
     const image = typeof req.body?.image === 'string' ? req.body.image : '';

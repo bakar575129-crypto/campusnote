@@ -5,7 +5,7 @@ import {api, ApiError} from './api';
 import {idbAllByUser, idbGet, idbPut} from './idb';
 import {uuid} from './ids';
 
-export type FileKind = 'page' | 'image' | 'sticker' | 'font' | 'pdf';
+export type FileKind = 'page' | 'image' | 'sticker' | 'font' | 'pdf' | 'audio';
 interface BlobRecord {userId: string; id: string; blob: Blob; kind: FileKind; name: string; uploaded: boolean}
 
 let userId: string | null = null;

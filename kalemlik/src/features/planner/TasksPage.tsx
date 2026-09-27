@@ -94,7 +94,8 @@ type Filter = 'all' | TaskCategory;
 
 export function TasksPage() {
   const tasks = useList('task');
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // Hızlı ekle / widget kısayolu: /gorevler?yeni=1 yeni kayıt penceresini açar.
+  const [draft, setDraft] = useState<Draft | null>(() => (new URLSearchParams(location.search).get('yeni') ? newTask() : null));
   const [filter, setFilter] = useState<Filter>('all');
   const [showDone, setShowDone] = useState(false);
   const today = todayIso();

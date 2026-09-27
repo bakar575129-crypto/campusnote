@@ -67,6 +67,12 @@ export function sniffMime(buf) {
   if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
   if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  // Ses (ders kaydı): WebM/Opus (Chrome, Android), MP4/AAC (Safari, iPhone), Ogg, WAV, MP3
+  if (buf.readUInt32BE(0) === 0x1a45dfa3) return 'audio/webm';
+  if (buf.subarray(0, 4).toString('latin1') === 'OggS') return 'audio/ogg';
+  if (buf.subarray(4, 8).toString('latin1') === 'ftyp') return 'audio/mp4';
+  if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WAVE') return 'audio/wav';
+  if (buf.subarray(0, 3).toString('latin1') === 'ID3' || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
   if (buf.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
   const tag = buf.subarray(0, 4).toString('latin1');
   if (tag === 'wOF2') return 'font/woff2';

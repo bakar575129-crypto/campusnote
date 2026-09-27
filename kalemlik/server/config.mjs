@@ -59,6 +59,7 @@ export function readConfig(env = process.env) {
     registrationOpen: env.REGISTRATION_OPEN !== 'false',
     sessionDays: int(env, 'SESSION_DAYS', 30, 1, 365),
     maxUploadMb: int(env, 'MAX_UPLOAD_MB', 15, 1, 100),
+    maxAudioMb: int(env, 'MAX_AUDIO_MB', 200, 5, 2000),
     ocr: {
       apiKey: env.ANTHROPIC_API_KEY || '',
       model: env.OCR_MODEL || 'claude-opus-5',

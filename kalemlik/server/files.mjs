@@ -2,7 +2,8 @@ import {Router} from 'express';
 import multer from 'multer';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {createHash} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
+import {createReadStream} from 'node:fs';
 import {HttpError} from './errors.mjs';
 import {transaction} from './db.mjs';
 import {rateLimit, sniffMime} from './security.mjs';
@@ -17,13 +18,28 @@ const KINDS = {
   sticker: {mimes: ['image/png', 'image/webp', 'image/jpeg'], maxMb: 5},
   font: {mimes: ['font/ttf', 'font/otf', 'font/woff', 'font/woff2'], maxMb: 5},
   pdf: {mimes: ['application/pdf'], maxMb: 50},
+  audio: {mimes: ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/wav', 'audio/mpeg'], maxMb: Infinity},
 };
 const UNUSED_GRACE_MS = 60 * 60 * 1000;
 
 export function createFiles({pool, config}) {
   const router = Router();
-  const upload = multer({storage: multer.memoryStorage(), limits: {fileSize: Math.max(config.maxUploadMb, 50) * 1024 * 1024, files: 1, fields: 4, parts: 6}});
+  // Yüklenen dosya belleğe alınmaz: önce diskte geçici klasöre akar, doğrulanınca kullanıcının klasörüne taşınır.
+  const incoming = path.join(config.storage, '.incoming');
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => { fs.mkdir(incoming, {recursive: true, mode: 0o700}).then(() => cb(null, incoming), cb); },
+      filename: (req, file, cb) => cb(null, `${Date.now()}-${randomUUID()}`),
+    }),
+    limits: {fileSize: Math.max(config.maxUploadMb, 50, config.maxAudioMb || 0) * 1024 * 1024, files: 1, fields: 4, parts: 6},
+  });
   const userDir = userId => path.join(config.storage, userId);
+  // Yarım kalmış (sunucu yeniden başladı vb.) geçici yüklemeler bir günden eskiyse silinir.
+  void fs.readdir(incoming).then(names => Promise.all(names.map(async n => {
+    const p = path.join(incoming, n);
+    const st = await fs.stat(p).catch(() => null);
+    if (st && Date.now() - st.mtimeMs > 86_400_000) await fs.unlink(p).catch(() => {});
+  }))).catch(() => {});
 
   /** Kullanıcının kayıtlarında (sayfa, kapak, sticker ve yazı tipi arşivi) geçen dosya kimlikleri. */
   async function referencedFiles(userId) {
@@ -45,47 +61,60 @@ export function createFiles({pool, config}) {
     await rateLimit(pool, 'upload:' + req.user.id, 300, 60 * 60 * 1000, 'Kısa sürede çok fazla dosya yüklendi. Biraz sonra tekrar dene.');
     next();
   }, upload.single('file'), async (req, res) => {
-    const id = uuid.parse(req.body?.id);
-    const kind = String(req.body?.kind || '');
-    const rule = KINDS[kind];
-    if (!rule) throw new HttpError(400, 'Dosya türü geçersiz.');
     const file = req.file;
-    if (!file || !file.size) throw new HttpError(400, 'Dosya seçilmedi.');
-    const mime = sniffMime(file.buffer);
-    if (!mime || !rule.mimes.includes(mime)) {
-      throw new HttpError(415, kind === 'font' ? 'Yalnızca TTF, OTF, WOFF veya WOFF2 yazı tipi yüklenebilir.' : 'Bu dosya türü desteklenmiyor.', 'BAD_TYPE');
-    }
-    const limitMb = Math.min(rule.maxMb, kind === 'pdf' ? 50 : config.maxUploadMb);
-    if (file.size > limitMb * 1024 * 1024) throw new HttpError(413, `Bu dosya en fazla ${limitMb} MB olabilir.`, 'TOO_LARGE');
-    const sha = createHash('sha256').update(file.buffer).digest('hex');
-    const name = Buffer.from(file.originalname || 'dosya', 'latin1').toString('utf8').replace(/[\u0000-\u001f\u007f<>"\\/]/g, '').slice(0, 180) || 'dosya';
-
-    // Aynı kimlik yeniden gönderilirse (bağlantı koptu, istemci tekrar denedi) işlem tekrarlanabilir.
-    const [[same]] = await pool.execute('SELECT user_id, sha256 FROM files WHERE id=?', [id]);
-    if (same) {
-      if (same.user_id === req.user.id && same.sha256 === sha) return res.json({id, mime, size: file.size});
-      throw new HttpError(409, 'Dosya kimliği kullanılamıyor.', 'ID_TAKEN');
-    }
-
-    const dir = userDir(req.user.id);
-    const target = path.join(dir, id);
-    let written = false;
     try {
-      await transaction(pool, async db => {
-        await db.execute('SELECT id FROM users WHERE id=? FOR UPDATE', [req.user.id]);
-        const plan = await currentPlan(db, req.user.id);
-        const {used} = await usedBytes(db, req.user.id);
-        if (used + file.size > plan.storageBytes) throw new HttpError(413, 'Depolama alanın doldu. Plan & Depolama ekranından kullanılmayan dosyaları temizleyebilir veya planını yükseltebilirsin.', 'QUOTA');
-        await fs.mkdir(dir, {recursive: true, mode: 0o700});
-        await fs.writeFile(target, file.buffer, {flag: 'wx', mode: 0o600});
-        written = true;
-        await db.execute('INSERT INTO files (id,user_id,kind,mime,name,size,sha256,created_at) VALUES (?,?,?,?,?,?,?,?)', [id, req.user.id, kind, mime, name, file.size, sha, Date.now()]);
+      const id = uuid.parse(req.body?.id);
+      const kind = String(req.body?.kind || '');
+      const rule = KINDS[kind];
+      if (!rule) throw new HttpError(400, 'Dosya türü geçersiz.');
+      if (!file || !file.size) throw new HttpError(400, 'Dosya seçilmedi.');
+      const head = Buffer.alloc(64);
+      const fh = await fs.open(file.path, 'r');
+      try { await fh.read(head, 0, 64, 0); } finally { await fh.close(); }
+      const mime = sniffMime(head);
+      if (!mime || !rule.mimes.includes(mime)) {
+        throw new HttpError(415, kind === 'font' ? 'Yalnızca TTF, OTF, WOFF veya WOFF2 yazı tipi yüklenebilir.' : kind === 'audio' ? 'Ses kaydı biçimi desteklenmiyor (WebM, MP4/M4A, OGG, WAV, MP3).' : 'Bu dosya türü desteklenmiyor.', 'BAD_TYPE');
+      }
+      const limitMb = kind === 'audio' ? config.maxAudioMb : Math.min(rule.maxMb, kind === 'pdf' ? 50 : config.maxUploadMb);
+      if (file.size > limitMb * 1024 * 1024) throw new HttpError(413, `Bu dosya en fazla ${limitMb} MB olabilir.`, 'TOO_LARGE');
+      const sha = await new Promise((resolve, reject) => {
+        const h = createHash('sha256');
+        createReadStream(file.path).on('data', d => h.update(d)).on('end', () => resolve(h.digest('hex'))).on('error', reject);
       });
-    } catch (error) {
-      if (written) await fs.unlink(target).catch(() => {});
-      throw error;
+      const name = Buffer.from(file.originalname || 'dosya', 'latin1').toString('utf8').replace(/[\u0000-\u001f\u007f<>"\\/]/g, '').slice(0, 180) || 'dosya';
+
+      // Aynı kimlik yeniden gönderilirse (bağlantı koptu, istemci tekrar denedi) işlem tekrarlanabilir.
+      const [[same]] = await pool.execute('SELECT user_id, sha256 FROM files WHERE id=?', [id]);
+      if (same) {
+        if (same.user_id === req.user.id && same.sha256 === sha) return res.json({id, mime, size: file.size});
+        throw new HttpError(409, 'Dosya kimliği kullanılamıyor.', 'ID_TAKEN');
+      }
+
+      const dir = userDir(req.user.id);
+      const target = path.join(dir, id);
+      let written = false;
+      try {
+        await transaction(pool, async db => {
+          await db.execute('SELECT id FROM users WHERE id=? FOR UPDATE', [req.user.id]);
+          const plan = await currentPlan(db, req.user.id);
+          const {used} = await usedBytes(db, req.user.id);
+          if (used + file.size > plan.storageBytes) throw new HttpError(413, 'Depolama alanın doldu. Plan & Depolama ekranından kullanılmayan dosyaları temizleyebilir veya planını yükseltebilirsin.', 'QUOTA');
+          await fs.mkdir(dir, {recursive: true, mode: 0o700});
+          if (await fs.access(target).then(() => true, () => false)) throw new HttpError(409, 'Dosya kimliği kullanılamıyor.', 'ID_TAKEN');
+          await fs.rename(file.path, target);
+          await fs.chmod(target, 0o600).catch(() => {});
+          written = true;
+          await db.execute('INSERT INTO files (id,user_id,kind,mime,name,size,sha256,created_at) VALUES (?,?,?,?,?,?,?,?)', [id, req.user.id, kind, mime, name, file.size, sha, Date.now()]);
+        });
+      } catch (error) {
+        if (written) await fs.unlink(target).catch(() => {});
+        throw error;
+      }
+      res.status(201).json({id, mime, size: file.size});
+    } finally {
+      // Geçici dosya (taşınmadıysa) her durumda silinir.
+      if (file?.path) await fs.unlink(file.path).catch(() => {});
     }
-    res.status(201).json({id, mime, size: file.size});
   });
 
   router.get('/files/:id', async (req, res, next) => {

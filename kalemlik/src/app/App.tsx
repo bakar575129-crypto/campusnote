@@ -22,6 +22,9 @@ import {AiPage} from '@/features/ai/AiPage';
 import {SearchPage} from '@/features/search/SearchPage';
 import {GradesPage} from '@/features/grades/GradesPage';
 import {startBrowserNotifier} from '@/features/notify/notifications';
+import {RecordingDetail, RecordingsPage} from '@/features/recordings/RecordingsPage';
+import {JournalPage} from '@/features/journal/JournalPage';
+import {WidgetPage} from '@/features/home/WidgetPage';
 import {onStoreEvent, useList} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
 import {setCustomFonts} from '@/features/fonts/fonts';
@@ -74,9 +77,12 @@ function SignedIn() {
   useEffect(() => startBrowserNotifier(), []);
   const editor = match('/defter/:id', path);
   if (editor) return <Suspense fallback={<Splash />}><CustomFonts /><EditorPage id={editor.id} /><GenerateHost /></Suspense>;
+  if (path === '/widget') return <><CustomFonts /><WidgetPage /></>;
   let page;
+  const recording = match('/kayitlar/:id', path);
   const deck = match('/calisma/deste/:id', path), quiz = match('/calisma/quiz/:id', path), plan = match('/calisma/plan/:id', path);
-  if (deck) page = <DeckPage key={deck.id} id={deck.id} />;
+  if (recording) page = <RecordingDetail key={recording.id} id={recording.id} />;
+  else if (deck) page = <DeckPage key={deck.id} id={deck.id} />;
   else if (quiz) page = <QuizPage key={quiz.id} id={quiz.id} />;
   else if (plan) page = <StudyPlanPage key={plan.id} id={plan.id} advice={query.get('oneri') || undefined} />;
   else switch (path) {
@@ -95,6 +101,8 @@ function SignedIn() {
     case '/ai': page = <AiPage />; break;
     case '/ara': page = <SearchPage />; break;
     case '/notlarim': page = <GradesPage />; break;
+    case '/kayitlar': page = <RecordingsPage />; break;
+    case '/gunluk': page = <JournalPage />; break;
     default: page = <NotebooksPage mode="all" />;
   }
   return <Shell><CustomFonts />{page}<GenerateHost /></Shell>;

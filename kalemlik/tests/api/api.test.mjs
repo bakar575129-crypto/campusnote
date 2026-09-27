@@ -502,3 +502,34 @@ test('arama: yalnızca kendi sayfaları, JSON anahtarlarındaki eşleşme sayıl
   r = await c('GET', '/api/search?q=%25_');
   assert.equal(r.body.pages.length, 0, 'joker karakter kaçırılır');
 });
+
+test('ders kaydı: ses dosyası imzayla doğrulanır; sunucuda metne çevirme anahtarsız kapalı; widget verisi', async () => {
+  const c = client();
+  await c('POST', '/api/auth/register', {name: 'Ses Test', email: 'ses@ornek.com', password: 'guclu-sifre-999'});
+  const webm = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(200, 1)]);
+  const up = async (buf, kind) => { const f = new FormData(); f.append('id', randomUUID()); f.append('kind', kind); f.append('file', new Blob([buf]), 'kayit.webm'); return c('POST', '/api/files', f); };
+  let r = await up(webm, 'audio');
+  assert.equal(r.status, 201);
+  assert.equal(r.body.mime, 'audio/webm');
+  r = await up(PNG, 'audio');
+  assert.equal(r.status, 415, 'resim ses diye yüklenemez');
+  r = await up(webm, 'image');
+  assert.equal(r.status, 415, 'ses resim diye yüklenemez');
+  const fileId = (await up(webm, 'audio')).body.id;
+  const recId = randomUUID();
+  r = await c('PUT', `/api/sync/recording/${recId}`, {rev: 0, data: {title: 'Kayıt', course: '', fileId, durationMs: 1000, bookmarks: [], transcript: '', summary: '', notebookId: ''}});
+  assert.equal(r.status, 200);
+  r = await c('GET', `/api/files/${fileId}`, undefined, {range: 'bytes=0-3'});
+  assert.equal(r.status, 206, 'ses dosyasında ileri/geri sarma için parça isteği desteklenir');
+  r = await c('GET', '/api/recordings/transcribe-status');
+  assert.equal(r.body.available, false);
+  r = await c('POST', `/api/recordings/${recId}/transcribe`, {});
+  assert.equal(r.status, 503);
+  assert.equal(r.body.code, 'TRANSCRIBE_DISABLED');
+  r = await c('GET', '/api/widget/today?tz=-180');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.study.goal, 90);
+  assert.deepEqual(r.body.lessons, []);
+  const other = client();
+  assert.equal((await other('GET', '/api/widget/today')).status, 401, 'oturum gerekir');
+});

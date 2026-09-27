@@ -96,7 +96,8 @@ export function NotebooksPage({mode}: {mode: Mode}) {
   const [term, setTerm] = useState('');
   const [sort, setSort] = useState<Sort>(() => readPref('klm:sort', 'recent'));
   const [view, setView] = useState<'grid' | 'list'>(() => readPref('klm:view', 'grid'));
-  const [dialog, setDialog] = useState<{mode: 'create' | 'edit'; nb?: Notebook} | null>(null);
+  // Hızlı ekle / widget kısayolu: /defterler?yeni=1 yeni defter penceresini açar.
+  const [dialog, setDialog] = useState<{mode: 'create' | 'edit'; nb?: Notebook} | null>(() => (new URLSearchParams(location.search).get('yeni') ? {mode: 'create'} : null));
   const [coverFor, setCoverFor] = useState<Notebook | null>(null);
   const [importing, setImporting] = useState('');
   const pdfInput = useRef<HTMLInputElement>(null);
