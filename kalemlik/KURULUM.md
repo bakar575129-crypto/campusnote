@@ -81,11 +81,15 @@ Siteyi açıp **Kayıt ol** ile ilk hesabı oluşturun — ilk hesap otomatik ol
 - Veya `.env`: `ANTHROPIC_API_KEY=sk-ant-...` ya da `OPENAI_API_KEY=sk-...` (sonra uygulamayı **Restart** edin).
 Anahtar yalnızca sunucuda kalır. Kullanıcı başına günlük sunucu tanıma sınırı plandaki "günlük tanıma hakkı"dır; sınır dolunca tanıma cihazda sürer.
 
+**Kalemlik AI (asistan, AI flashcard/quiz/plan, özet):** Aynı anahtar kullanılır (Yönetim → Sistem ya da `.env`: `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`; model için `AI_MODEL`, `OPENAI_AI_MODEL`). Anahtar yoksa AI sohbeti kapalıdır; flashcard, quiz ve çalışma planı kural tabanlı üretilir. Günlük AI hakkı plan başına Yönetim → Planlar'dan ayarlanır.
+
+**Ders kaydını sunucuda metne çevirme:** `OPENAI_API_KEY` gerekir (Whisper). Ses dosyası sınırı `MAX_AUDIO_MB` (varsayılan 200; metne çevirme için tek dosya en fazla 25 MB). Anahtar yoksa tarayıcının canlı transkripti kullanılabilir.
+
 **Şifre sıfırlama e-postası:** `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` ayarlayın (cPanel e-posta hesabınızın SMTP bilgileri). SMTP yoksa sıfırlama bağlantısı sunucu günlüğüne (`stderr.log`) yazılır; ayrıca `npm run password:reset -- e-posta` ile şifre doğrudan sıfırlanabilir.
 
 **Yönetim paneli:** İlk kayıt olan hesap yöneticidir; menüde **Yönetim** görünür (`/yonetim`). Buradan kullanıcılara abonelik paketi (süreli), ek GB depolama ve ek defter hakkı verebilir, şifre sıfırlama bağlantısı gönderebilir (SMTP yoksa bağlantı size gösterilir, kopyalayıp iletirsiniz), hesap kapatabilir, başka yöneticiler atayabilir ve plan limitlerini düzenleyebilirsiniz.
 
-**Planlar:** Ücretsiz / Plus / Pro planları yönetim panelinden (Planlar sekmesi) veya `plans` tablosundan düzenlenir (depolama, defter sınırı — 0 = sınırsız, günlük tanıma). Komut satırından plan tanımlamak için:
+**Planlar:** Ücretsiz / Plus / Pro planları yönetim panelinden (Planlar sekmesi) veya `plans` tablosundan düzenlenir (depolama, defter sınırı — 0 = sınırsız, günlük tanıma, günlük AI hakkı ve AI flashcard/quiz/plan, sunucuda metne çevirme, premium şablonlar, ortak defter özellikleri). **Şablonlar** sekmesinden mağazaya şablon eklenir, düzenlenir, premium yapılır ya da kapatılır. Komut satırından plan tanımlamak için:
 
 ```bash
 npm run plan:grant -- ogrenci@ornek.com plus 30
@@ -110,7 +114,7 @@ Adım adım ve ekran adlarıyla: **[GUNCELLEME.md](GUNCELLEME.md)** (yalnızca d
 1. Uygulamayı cPanel'den **Stop** edin.
 2. `.env` ve `storage/` klasörünü **koruyarak** yeni paketteki dosyaları üzerine kopyalayın (`dist/`, `server/`, `sql/`, `scripts/`, `shared/`, `package*.json`, `app.js`).
 3. `npm ci --omit=dev` → **Restart**. Veritabanı güncellemeleri sunucu açılırken otomatik uygulanır (isterseniz `npm run db:migrate` ile elle de çalıştırabilirsiniz).
-4. Doğrulama: tarayıcıda `https://alan-adiniz/api/health` adresini açın; `"version"` yeni paketin sürümünü (ör. `1.1.2`) göstermelidir. Eski sürüm görünüyorsa uygulama yeniden başlatılmamıştır — cPanel'de **Restart** edin. Açık kalmış tablet/telefon uygulamaları, sunucu güncellenince kendini yeniler.
+4. Doğrulama: tarayıcıda `https://alan-adiniz/api/health` adresini açın; `"version"` yeni paketin sürümünü (ör. `1.2.0`) göstermelidir. Eski sürüm görünüyorsa uygulama yeniden başlatılmamıştır — cPanel'de **Restart** edin. Açık kalmış tablet/telefon uygulamaları, sunucu güncellenince kendini yeniler.
 
 ## 11. Yedekleme
 

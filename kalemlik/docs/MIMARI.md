@@ -64,6 +64,19 @@ Bir çizgi (stroke) `{id, t: pen|shape|text, pen, c, w, o, pts: [x, y, basınç,
 - Hız sınırları: IP ve e-posta başına giriş, yükleme, OCR, şifre işlemleri (birden çok Node sürecinde tutarlı, veritabanı tabanlı) + süreç içi genel sınır.
 - Gizli anahtarlar (veritabanı, Anthropic, SMTP) yalnızca sunucudaki `.env` dosyasındadır.
 
+## 1.2.0 eklemeleri
+
+- **Akıllı Yazı Güzelleştirme:** `src/features/editor/beautify.ts` (dil kaydı `RECOGNITION_LANGS`, bekleme süreleri, kelime bitti mi, yerleştirme `placeText`, tanıma/mürekkep tutarlılığı). Eski `correctHandwriting` kaldırıldı; eski ayarlar `resolveWrite` ile "kapalı"ya taşınır. Sunucu tanıma istemi (`server/ocr.mjs`) harfi harfine yazdırır, düzeltme yaptırmaz.
+- **Yeni eşitlenen kayıtlar** (genel eşitleme altyapısı: `server/entities.mjs` + `server/schemas.mjs` + `shared/repair.mjs` + `src/lib/types.ts`): `deck`, `card` (üst kaydı deste), `quiz`, `studyPlan`, `gradeCourse`, `recording`, `journal`. Hepsi çevrimdışı çalışır.
+- **Kalemlik AI:** `server/ai.mjs` (Anthropic varsayılan, sunucu tarafı yedek modeller; OpenAI alternatif), `server/aiRoutes.mjs` (sohbetler, mesajlar, içerik üretimi). Kullanıcının kendi verisi `<kaynak>` bağlamı olarak eklenir; kota `ai_usage` tablosunda, plan başına `plans.ai_daily_limit`; başarısız istek hakkı iade edilir.
+- **Plan özellikleri:** `plans.features` (JSON) — `server/plans.mjs FEATURE_DEFAULTS`; yönetim panelinden değiştirilir. Geçiş 3: `plans.ai_daily_limit`, `plans.features`, `notebooks.updated_by`, `notebook_pages.updated_by`.
+- **Arama:** `server/search.mjs` (Türkçe harf katlamalı, JSON anahtarlarını saymayan sayfa metni araması) + istemcide yerel arama.
+- **Ders kaydı:** `MediaRecorder` (32 kbps) → `audio` türü dosya (imza: webm/ogg/mp4/wav/mp3). Yüklemeler artık diske akıtılır (`storage/.incoming`), SHA-256 akış hâlinde hesaplanır. `server/transcribe.mjs` Whisper ile metne çevirir.
+- **Ortak defter:** `notebook_members` (davet → kabul), `notebook_activity`. `server/sharing.mjs` yetkiyi (`owner/editor/viewer`) hesaplar; `GET /api/sync` üye defterlerini ve `collab` listesini döner; editör sayfa yazar (sahibinin adına), görüntüleyene `403 READ_ONLY`. Açık editör `/api/notebooks/:id/changes` ile 4 sn'de bir yoklar; çakışmada `src/lib/merge.ts` üç yönlü birleştirir (ortak başlangıç IndexedDB'de).
+- **Paylaşım bağlantıları:** `share_links` (22 karakterlik rastgele kimlik); `/api/public/*` oturumsuz, yalnızca paylaşılan sayfaları ve onlardaki dosyaları verir.
+- **Şablon Mağazası:** `templates` (hazır olanlar ilk istekte eklenir, yönetici değişikliği ezilmez), `template_purchases`. `server/templates.mjs`; premium erişimi plan özelliği `premiumTemplates` ya da satın alma.
+- **XP:** `server/xp.mjs`. Eşitleme yazmasından sonra kaydın önceki/yeni hâli karşılaştırılır (`xpEvents`); `xp_transactions` (UNIQUE kullanıcı+neden+referans) ve günlük sınır; rozetler `BADGES` listesine satır eklenerek genişletilir. İstemci XP göndermez.
+
 ## 1.1.2 eklemeleri
 
 - **Ortak onarıcı:** `shared/repair.mjs` (türleri `shared/repair.d.mts`). Sunucu `server/sync.mjs` içinde her kaydı `repairRecord` → Zod şeması sırasıyla işler; istemci `src/lib/sanitize.ts` üzerinden aynı fonksiyonu göndermeden önce çalıştırır. Koordinat sınırları (`LIMITS`) şemayla paylaşılır. İçeriği olmayan sayfa boş sayfaya çevrilmez (sunucudaki içeriği silmesin diye reddedilir).

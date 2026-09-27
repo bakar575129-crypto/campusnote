@@ -6,6 +6,25 @@
 
 **Kurulum:** [KURULUM.md](KURULUM.md) · **Güncelleme:** [GUNCELLEME.md](GUNCELLEME.md) · **Mimari:** [docs/MIMARI.md](docs/MIMARI.md) · **Ödeme altyapısı:** [docs/ODEME.md](docs/ODEME.md)
 
+## 1.2.0'da yenilikler
+
+- **Akıllı Yazı Güzelleştirme** (eski "otomatik el yazısı düzeltme" tamamen kaldırıldı; kapalıyken yalnızca kendi el yazınla yazarsın). Açıksa kelimen **bittikten sonra** (kalemi kaldırıp beklediğinde — Hızlı 0,3 / Normal 0,6 / Yavaş 1 sn —, sonraki kelimeye geçtiğinde ya da başka araç seçtiğinde) el yazın tanınır ve **seçtiğin yazı tipinde, aynı yerde** gösterilir. Metin yeniden yazılmaz, yazım düzeltilmez, kelime değiştirilmez (mitoz → motor olmaz); Türkçe harfler, rakamlar, matematik işaretleri, noktalama, parantez, %, para birimleri korunur. Tanıma emin değilse el yazın olduğu gibi kalır. Türkçe ve İngilizce; yeni dil eklenebilir.
+- **✨ Kalemlik AI** — derslerini, notlarını, görevlerini ve sınavlarını bilen asistan: sohbet geçmişi, yeni sohbet, not/defter seçerek soru sorma, hazır komutlar, cevabı deftere kaydetme. Anahtar yalnızca sunucuda; dakika başı hız sınırı ve plana göre günlük kullanım hakkı.
+- **🧠 Çalışma** — notlardan/PDF'ten **flashcard** (5/10/20/50; çevir, bildim/bilemedim, kolay/orta/zor, aralıklı tekrar), **AI Quiz** (çoktan seçmeli, doğru/yanlış, boşluk doldurma; Kolay/Orta/Zor/Karışık; puan, yanlış konular, geçmiş), **sınav çalışma planı** (günlere bölünmüş, görevlere ve takvime eklenir, düzenlenebilir). AI kapalıysa kural tabanlı üretim çalışır.
+- **🔎 Gelişmiş arama** (Ctrl/⌘ K) — defter, sayfa metni, tanınan el yazısı, görev, ders, flashcard, quiz, kayıt, günlük; ders/tür/tarih/favori süzgeçleri.
+- **🎓 Notlarım** — dönem, ders, kredi/AKTS, vize/final/ödev/quiz/diğer ve özel ağırlıklar; ders ortalaması, harf notu, dönem ortalaması, GANO; "Finalden kaç almalıyım?".
+- **🔔 Akıllı bildirimler** — sınav (7/3/1 gün kala), ödev, günlük çalışma hedefi, flashcard tekrarı, çalışma serisi, AI önerisi; tür tür açılıp kapanır, saat ayarlanır.
+- **🎙️ Ders Kaydı** — kaydet/duraklat/devam/bitir, işaretler ("12:32 → Önemli formül"), canlı transkript (tarayıcı destekliyse) ya da sunucuda metne çevirme (OpenAI anahtarı gerekir), AI özet/önemli noktalar, transkriptten flashcard ve quiz, deftere ekleme.
+- **📱 Widget** (`/widget`, ana ekrana eklenebilir) — Bugün, dersler, sınav, görevler, çalışma süresi (45/90 dk), Hızlı Ekle.
+- **👥 Ortak defter** — e-postayla davet, Görüntüleyebilir/Düzenleyebilir, üye listesi, değişiklik geçmişi, son düzenleyen, birkaç saniyede canlı eşitleme; aynı sayfada aynı anda yazılsa bile çizgiler birleşir (üç yönlü birleştirme).
+- **🔗 Not paylaşımı** — Gizli / Bağlantıya sahip olan / Herkese açık; `/share/note/…` sayfası (başlık, önizleme, ders, tarih, oluşturan, PDF indirme), istenince kapatılır; Keşfet'te herkese açık notlar.
+- **🛍️ Şablon Mağazası** — 13 kategoride hazır defter şablonları (ders notu, planner, Cornell, matematik, mühendislik, tıp, hukuk, günlük, haftalık/aylık plan, sınav planı, minimal, renkli); önizleme, kullanım sayısı, ücretsiz/premium; "Şablonu Kullan" yeni defter açar. Yönetim panelinden şablon eklenir/düzenlenir/kapatılır.
+- **🏆 XP ve rozetler** — yeni not +5, görev +10, 30 dk odak +20, quiz +15, flashcard +10, sınav planını bitirme +50, günlük +5; seviyeler ve 8 rozet. XP'yi **yalnızca sunucu** hesaplar (her iş bir kez, günlük sınırlı).
+- **🏠 Ana Sayfa** — "Günaydın 👋", Bugün (ders, görev, sınav, çalışma süresi, seri), bugünkü plan, çalışma hedefi, yaklaşan sınav, Kalemlik AI, hızlı ekle, kaldığın defterler. **📚 Dersler** sayfası her dersin programını, defterlerini, görevlerini, kartlarını, kayıtlarını ve notunu bir arada gösterir. **👤 Profil**: seviye, rozetler, istatistikler.
+- **Yeni menü**: Ana Sayfa, Dersler, Defterler, Takvim, Görevler, Çalışma, Notlarım, Kayıtlar, Kalemlik AI, Paylaşımlar, Şablonlar, Profil; eski bölümler (Favoriler, Ders Programı, Odaklan, Günlük, Çöp Kutusu) "Diğer" altında.
+- **Planlar**: AI günlük hakkı, AI flashcard/quiz/plan, sunucuda metne çevirme, premium şablonlar ve ortak defter (kişi sayısı) plan başına yönetim panelinden açılıp kapatılır; kodda sabit değildir.
+- Güvenlik: tüm yeni uç noktalar oturum, sahiplik/üyelik yetkisi, girdi doğrulama (zod) ve hız sınırıyla korunur; ses dosyaları imzayla doğrulanır, büyük dosyalar belleğe alınmadan diske akıtılır. Mevcut veriler korunur; veritabanı geçişleri açılışta otomatik ve geriye uyumludur.
+
 ## 1.1.2'de yenilikler
 
 - **"Kaydedilemedi" hatası kökten giderildi.** Onarım artık **sunucuda** da yapılır: sunucu her kaydı doğrulamadan önce ortak onarıcıdan (`shared/repair.mjs`) geçirir. Böylece hangi uygulama sürümünden, hangi cihazdan ya da ne kadar eski bir yerel kopyadan gelirse gelsin kayıt reddedilmez: sınır dışı konumlar sınıra çekilir, bozuk noktalar atlanır, geçersiz renk/yazı tipi/saat/tarih/kategori düzeltilir, eksik alanlar varsayılanla doldurulur, aynı kimlikli öğeler ayrılır. Önceki sürümde onarılmayan alanlar (ör. tarihi boş görev, bilinmeyen kategori, bozuk sayfa sırası, eksik revizyon) da artık kapsanıyor.
@@ -16,7 +35,7 @@
 ## 1.1.1'de yenilikler
 
 - **"Kaydedilemedi: Gönderilen bilgileri kontrol et" hatası giderildi.** Neden: uzaklaştırılmış görünümde kâğıdın dışına taşan çizgiler ve seçimi sayfanın çok dışına taşımak, sunucunun koordinat sınırını aşıyordu; sayfa bu yüzden hiç kaydedilemiyordu. Sınırlar genişletildi ve uygulama artık her kaydı göndermeden önce sunucu kurallarına uydurur (geçersiz noktaları onarır, çok uzun çizgileri böler, saatleri düzeltir). Daha önce takılıp kalmış kayıtlar da kendiliğinden onarılıp gönderilir. Bir alan yine de reddedilirse sunucu hangi alan olduğunu bildirir ve uyarı bir kez gösterilir.
-- **16 bloknot çeşidi** (Stickerlar → **Bloknotlar**): sarı/pembe/mavi/yeşil yapışkan notlar, spiralli (çizgili ve kareli) bloknot, yırtık defter kâğıdı, fiş kartı, yapılacaklar listesi, kalp, bulut, panolu not, kraft not, haftalık mini plan, sınav notu kartı, noktalı (ataşlı) not. Sayfanın her yerine konur, taşınır, boyutlandırılır, döndürülür ve **üstüne kalemle yazılır** (mürekkep bloknotun üstünde görünür; PDF'te de). Otomatik yazı düzeltme bloknot üstündeki yazıya dokunmaz.
+- **16 bloknot çeşidi** (Stickerlar → **Bloknotlar**): sarı/pembe/mavi/yeşil yapışkan notlar, spiralli (çizgili ve kareli) bloknot, yırtık defter kâğıdı, fiş kartı, yapılacaklar listesi, kalp, bulut, panolu not, kraft not, haftalık mini plan, sınav notu kartı, noktalı (ataşlı) not. Sayfanın her yerine konur, taşınır, boyutlandırılır, döndürülür ve **üstüne kalemle yazılır** (mürekkep bloknotun üstünde görünür; PDF'te de). 
 
 ## 1.1.0'da yenilikler
 
@@ -45,9 +64,7 @@
 
 **Yalnızca kalem modu** — stylus yazar; parmak ve avuç içi yazmaz, kalem değerken gelen dokunuşlar yok sayılır; iki parmak hareketleri çalışır; iki satır kaydırma düğmeleri. Kalemin yan tuşu ve silgi ucu için eylem atanabilir.
 
-**Otomatik el yazısı düzeltme** — kapalı / kelime / cümle. Kalem kısa süre durunca (0,2–1,5 sn, ayarlanabilir) çalışır; yazarken hiçbir şey kaymaz. Satırlara ve kelimelere ayırır; çizgili sayfada satır çizgisine, kareli sayfada karelerin içine oturtur; okunur boyuttaki yazıyı küçültmez; kelimeleri üst üste bindirmez, sağdaki yazıyı iter, taşan kelimeyi alt satıra alır; boyut, kalınlık, harf aralığı ayarlanır; tek adımda geri alınır.
-- **Kendi el yazım**: yazı metne çevrilmeden hizalanır (cihazda, internetsiz).
-- **Yazı tipiyle**: yazı tanınır ve seçilen yazı tipinde metne dönüşür — cihazda (internetsiz) ya da API anahtarı tanımlıysa sunucuda. Tanıma emin değilse el yazısı silinmez, düzeltilerek korunur.
+**Akıllı Yazı Güzelleştirme** — kapalıyken yalnızca kendi el yazın. Açıkken kelime bitince (bekleme süresi Hızlı / Normal / Yavaş) el yazısı tanınır ve seçilen yazı tipinde aynı konumda, aynı renkte gösterilir; metin değiştirilmez, yazım düzeltilmez. Tanıma cihazda (internetsiz) ya da API anahtarı tanımlıysa sunucuda yapılır; emin olunamazsa el yazısı korunur. Tek adımda geri alınır.
 
 **Yazı tipleri** — 7 hazır Türkçe karakterli yazı tipi (Caveat, Kalam, Patrick Hand, Playpen Sans, Nunito, Lora, JetBrains Mono); TTF/OTF/WOFF/WOFF2 yükleme (≤5 MB), eksik Türkçe harf uyarısı, hesapla eşitlenir.
 
@@ -111,13 +128,15 @@ kalemlik/
 
 ## Testler
 
-- 25 birim testi (rastgele bozuk kayıt onarımı, sticker/desen SVG geçerliliği ve OCR sağlayıcı mantığı dahil): otomatik düzeltmenin satıra/kareye oturtması, küçültmeme, üst üste bindirmeme, itme; silgi; seçim; şekiller; listeler; sticker arka plan temizleme; dosya imzası; parola; yapılandırma; şemalar.
-- 9 API testi (MariaDB; yönetim paneli ve hazır sticker şeması dahil): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, silme izi, defter sınırı ve plan, dosya yükleme/imza/kota/temizlik, doğrulama, şifre değiştirme/sıfırlama, OCR.
-- 7 tarayıcı testi (`tests/e2e`): genel akış, PDF/sticker/yazı tipi/otomatik düzeltme, dokunmatik (yalnızca kalem, sıkıştırma, kilit, avuç içi), çevrimdışı PWA, 1.1 özellikleri (kaydırarak geçiş, hazır sticker, galeri görseli, sevimli kapak, cihazda tanıma), bloknotlar (üstüne yazma, kâğıt dışı çizginin hatasız kaydı), yönetim paneli.
+- 37 birim testi: Akıllı Yazı Güzelleştirme (kelime bitmeden dönüştürmeme, aynı konum/taban çizgisi, üst üste bindirmeme, tanıma sonucunun mürekkeple tutarlılığı), rastgele bozuk kayıt onarımı (tüm kayıt türleri), aralıklı tekrar, flashcard/quiz/plan üretimi, not hesaplama ("finalden kaç"), güvenli Markdown, üç yönlü sayfa birleştirme, AI sağlayıcı mantığı, silgi, seçim, şekiller, dosya imzası, şemalar.
+- 16 API testi (MariaDB): kayıt/giriş, kullanıcı izolasyonu, CSRF, eşitleme ve çakışma, defter sınırı ve plan, dosya yükleme, yönetim paneli, öğrenme kayıtları, Kalemlik AI (bağlam, izolasyon, kota), arama, ders kaydı ve ses doğrulama, ortak defter ve paylaşım bağlantıları, XP kuralları ve günlük sınır, şablon mağazası ve premium kilidi.
+- 12 tarayıcı testi (`tests/e2e`): genel akış, medya, dokunmatik, çevrimdışı PWA, 1.1 özellikleri ve Akıllı Yazı Güzelleştirme, bloknotlar, yönetim paneli, Çalışma (flashcard/quiz/plan/AI), arama/notlarım/bildirimler, ders kaydı/günlük/widget, ortak defter (üç kullanıcı, canlı eşitleme, salt okunur) ve paylaşım bağlantısı, ana sayfa/şablonlar/XP/profil/dersler (telefon görünümü dahil). Her test tek bir eşitleme reddinde ya da konsol hatasında başarısız olur.
 
 ## Bilinen sınırlar
 
 - Çevrimiçi ödeme sağlayıcısı entegre değildir; altyapı hazırdır, planlar yönetici betiğiyle atanır (docs/ODEME.md).
 - Cihazda tanıma düzgün, ayrık yazılmış el yazısında iyi çalışır; çok bitişik/dağınık yazıda emin olamaz ve el yazısını korur. Bu durumlar için yönetim panelinden bir API anahtarı eklemek isabeti artırır.
 - Arka plan temizleme düz/sade arka planlarda iyi sonuç verir; karmaşık fotoğraflarda kırpma önerilir.
-- Aynı sayfa iki cihazda aynı anda düzenlenirse iki sürüm de korunur (ikincisi ayrı sayfa olur); gerçek zamanlı ortak düzenleme yoktur.
+- Ortak defterde değişiklikler birkaç saniyede bir (yoklamayla) gelir; aynı anda yazılanlar birleşir ama imleç düzeyinde anlık ortak yazma yoktur.
+- Sunucuda ses → metin için OpenAI anahtarı gerekir (Whisper); yoksa tarayıcının canlı konuşma tanıması (Chrome/Edge) ya da elle transkript kullanılır. Kalemlik AI için Anthropic ya da OpenAI anahtarı gerekir; yoksa flashcard/quiz/plan kural tabanlı üretilir.
+- Uygulama kapalıyken bildirim göstermek tarayıcıya bağlıdır (periyodik arka plan eşitlemesi yalnızca yüklü PWA'da, Chromium tabanlı tarayıcılarda çalışır); diğerlerinde bildirimler uygulama açıkken gelir.
