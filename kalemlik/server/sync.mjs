@@ -123,6 +123,10 @@ export function createSync({pool}) {
         const [[nb]] = await db.execute('SELECT id FROM notebooks WHERE id=? AND user_id=?', [data.notebookId, userId]);
         if (!nb) throw new HttpError(409, 'Sayfanın defteri sunucuda yok. Defter eşitlenince tekrar denenecek.', 'MISSING_PARENT');
       }
+      if (def.parent) {
+        const [[parent]] = await db.execute(`SELECT id FROM ${def.parent.table} WHERE id=? AND user_id=?`, [data[def.parent.key], userId]);
+        if (!parent) throw new HttpError(409, def.parent.message, 'MISSING_PARENT');
+      }
       if (entity === 'notebook') await assertNotebookCapacity(db, userId, id, data, existing);
 
       const cols = def.fields.map(f => f.col);

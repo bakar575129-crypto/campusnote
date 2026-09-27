@@ -1,5 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {Shield, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
+import {Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
 import {Brand} from '@/components/Brand';
 import {linkProps, useLocation} from './router';
 import {logout, useSession} from './session';
@@ -12,6 +12,8 @@ export const NAV = [
   {to: '/program', label: 'Ders Programı', icon: CalendarClock},
   {to: '/gorevler', label: 'Ödevler & Sınavlar', icon: ListChecks},
   {to: '/takvim', label: 'Takvim', icon: CalendarDays},
+  {to: '/calisma', label: 'Çalışma', icon: Brain},
+  {to: '/ai', label: 'Kalemlik AI', icon: Sparkles},
   {to: '/odak', label: 'Odaklan', icon: Timer},
   {to: '/cop', label: 'Çöp Kutusu', icon: Trash2},
 ];
@@ -53,7 +55,7 @@ export function Shell({children}: {children: ReactNode}) {
   const {user} = useSession();
   const [open, setOpen] = useState(false);
   const [more, setMore] = useState(false);
-  const isActive = (to: string) => path === to || (to === '/defterler' && path === '/');
+  const isActive = (to: string) => path === to || (to === '/defterler' && path === '/') || (to !== '/' && path.startsWith(to + '/'));
   const bottom = user?.role === 'admin' ? [...NAV_BOTTOM, {to: '/yonetim', label: 'Yönetim', icon: Shield}] : NAV_BOTTOM;
   useEffect(() => { setOpen(false); setMore(false); }, [path]);
 

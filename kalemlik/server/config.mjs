@@ -65,6 +65,10 @@ export function readConfig(env = process.env) {
       openaiKey: env.OPENAI_API_KEY || '',
       openaiModel: env.OPENAI_OCR_MODEL || 'gpt-4.1-mini',
     },
+    ai: {
+      model: env.AI_MODEL || 'claude-opus-5',
+      openaiModel: env.OPENAI_AI_MODEL || 'gpt-4.1',
+    },
     mail: {
       host: env.SMTP_HOST || '',
       port: int(env, 'SMTP_PORT', 587, 1, 65535),

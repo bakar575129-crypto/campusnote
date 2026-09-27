@@ -13,7 +13,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const toNum = v => (isNum(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : NaN);
 const num = (v, a, b, fallback) => { const n = toNum(v); return Number.isFinite(n) ? clamp(n, a, b) : fallback; };
-const int = (v, a, b, fallback) => Math.round(num(v, a, b, fallback));
+const int = (v, a, b, fallback) => Math.round(num(v, a, b, fallback)) + 0; // +0: -0 yerine 0
 const coord = v => num(v, LIMITS.coordMin, LIMITS.coordMax, 0);
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const SHORT_HEX = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/;
@@ -115,6 +115,7 @@ export function repairPageContent(c) {
   };
   for (const k of ['paperColor', 'lineColor', 'textColor']) { const h = optHex(src[k]); if (h) out[k] = h; }
   if (src.spacing != null && Number.isFinite(toNum(src.spacing))) out.spacing = num(src.spacing, 8, 90, 30);
+  if (typeof src.searchText === 'string' && src.searchText.trim()) out.searchText = src.searchText.slice(0, 60_000);
   if (isObject(src.background) && typeof src.background.fileId === 'string' && UUID.test(src.background.fileId)) {
     out.background = {fileId: src.background.fileId.toLowerCase(), kind: src.background.kind === 'pdf' ? 'pdf' : 'image'};
   }
@@ -225,6 +226,88 @@ export function repairRecord(entity, data) {
     case 'settings':
       d.data = isObject(d.data) ? d.data : {};
       break;
+    // ---------------------------------------------------------------- 1.2 öğrenme merkezi
+    case 'deck':
+      d.title = title(d.title, 160, 'Deste');
+      d.course = str(d.course, 120); d.color = hex(d.color, '#8b5cf6'); d.source = str(d.source, 300);
+      break;
+    case 'card':
+      if (typeof d.deckId === 'string') d.deckId = d.deckId.toLowerCase();
+      d.front = title(d.front, 4000, '?'); d.back = str(d.back, 4000); d.topic = str(d.topic, 120);
+      d.ease = num(d.ease, 1.3, 3.5, 2.5); d.interval = num(d.interval, 0, 36500, 0);
+      d.due = int(d.due, 0, 1e15, 0); d.reps = int(d.reps, 0, 1e6, 0); d.lapses = int(d.lapses, 0, 1e6, 0);
+      d.lastReviewAt = timestamp(d.lastReviewAt); d.lastGrade = int(d.lastGrade, -1, 3, -1);
+      break;
+    case 'quiz': {
+      d.title = title(d.title, 160, 'Quiz'); d.course = str(d.course, 120); d.source = str(d.source, 300);
+      d.difficulty = oneOf(d.difficulty, ['easy', 'medium', 'hard', 'mixed'], 'mixed');
+      d.questions = uniqueIds(arr(d.questions).map(repairQuestion).filter(Boolean).slice(0, 60));
+      if (!d.questions.length) d.questions = [{id: 'q1', type: 'tf', prompt: 'Bu quizde soru kalmadı.', options: ['Doğru', 'Yanlış'], answer: 'Doğru', explanation: '', topic: ''}];
+      d.result = repairQuizResult(d.result, d.questions.length);
+      d.completedAt = d.result ? (timestamp(d.completedAt) ?? d.result.finishedAt) : timestamp(d.completedAt);
+      break;
+    }
+    case 'studyPlan':
+      d.title = title(d.title, 160, 'Çalışma planı'); d.course = str(d.course, 120);
+      d.examTaskId = optUuid(d.examTaskId); d.examDate = isoDate(d.examDate);
+      d.items = uniqueIds(arr(d.items).map(repairPlanItem).filter(Boolean).slice(0, 200));
+      d.completedAt = timestamp(d.completedAt);
+      break;
+    case 'gradeCourse':
+      d.term = str(d.term, 60); d.name = title(d.name, 120, 'Ders');
+      d.credit = num(d.credit, 0, 30, 0); d.ects = num(d.ects, 0, 60, 0);
+      d.components = uniqueIds(arr(d.components).map(c => isObject(c) ? {id: shortId(c.id), name: title(c.name, 40, 'Not'), weight: num(c.weight, 0, 100, 0), score: c.score == null || c.score === '' || !Number.isFinite(toNum(c.score)) ? null : num(c.score, 0, 100, 0)} : null).filter(Boolean).slice(0, 12));
+      d.letter = typeof d.letter === 'string' && /^[A-Za-z]{0,3}[+-]?$/.test(d.letter.trim()) ? d.letter.trim().toUpperCase() : '';
+      d.included = d.included !== false;
+      break;
+    case 'recording':
+      d.title = title(d.title, 160, 'Ders kaydı'); d.course = str(d.course, 120);
+      d.fileId = optUuid(d.fileId); d.notebookId = optUuid(d.notebookId);
+      d.durationMs = int(d.durationMs, 0, 86_400_000, 0);
+      d.bookmarks = uniqueIds(arr(d.bookmarks).map(b => isObject(b) ? {id: shortId(b.id), t: int(b.t, 0, 86_400_000, 0), label: str(b.label, 200)} : null).filter(Boolean).slice(0, 300));
+      d.transcript = str(d.transcript, 500_000); d.summary = str(d.summary, 50_000);
+      break;
+    case 'journal':
+      d.day = isoDate(d.day); d.title = str(d.title, 160); d.body = str(d.body, 100_000);
+      d.mood = typeof d.mood === 'string' && /^[a-z-]{0,12}$/.test(d.mood) ? d.mood : '';
+      break;
   }
   return d;
+}
+
+const optUuid = v => (typeof v === 'string' && UUID.test(v) ? v.toLowerCase() : '');
+
+function repairQuestion(q) {
+  if (!isObject(q)) return null;
+  const prompt = str(q.prompt, 8000).trim().slice(0, 2000).trim();
+  if (!prompt) return null;
+  const type = oneOf(q.type, ['mcq', 'tf', 'fill'], arr(q.options).length ? 'mcq' : 'fill');
+  let options = arr(q.options).map(o => str(o, 500)).filter(o => o.trim()).slice(0, 6);
+  if (type === 'tf') options = ['Doğru', 'Yanlış'];
+  let answer = str(q.answer, 500);
+  if (type === 'mcq' && options.length && !options.includes(answer)) answer = options[0];
+  return {id: shortId(q.id), type, prompt, options: type === 'fill' ? [] : options, answer, explanation: str(q.explanation, 2000), topic: str(q.topic, 120)};
+}
+
+function repairQuizResult(r, total) {
+  if (!isObject(r)) return null;
+  const answers = {};
+  if (isObject(r.answers)) for (const [k, v] of Object.entries(r.answers).slice(0, 60)) if (SHORT_ID.test(k)) answers[k] = str(v, 500);
+  const correct = int(r.correct, 0, total, 0);
+  const wrong = int(r.wrong, 0, total - correct, 0);
+  return {
+    answers, correct, wrong, total,
+    percent: total ? Math.round((correct / total) * 1000) / 10 : 0,
+    weakTopics: arr(r.weakTopics).map(t => str(t, 120)).filter(Boolean).slice(0, 20),
+    finishedAt: timestamp(r.finishedAt) ?? Date.now(),
+  };
+}
+
+function repairPlanItem(it) {
+  if (!isObject(it)) return null;
+  return {
+    id: shortId(it.id), date: isoDate(it.date), topic: title(it.topic, 200, 'Çalışma'),
+    minutes: int(it.minutes, 5, 600, 45), kind: oneOf(it.kind, ['study', 'review', 'quiz', 'rest'], 'study'),
+    done: !!it.done, taskId: optUuid(it.taskId),
+  };
 }

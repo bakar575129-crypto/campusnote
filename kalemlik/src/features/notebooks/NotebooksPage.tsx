@@ -1,5 +1,5 @@
 import {useMemo, useRef, useState} from 'react';
-import {BookOpen, Copy, FileUp, LayoutGrid, List, MoreVertical, Palette, PenLine, Plus, RotateCcw, Search, Star, Trash2, X, CalendarClock, ListChecks} from 'lucide-react';
+import {Layers, Target, Sparkles, BookOpen, Copy, FileUp, LayoutGrid, List, MoreVertical, Palette, PenLine, Plus, RotateCcw, Search, Star, Trash2, X, CalendarClock, ListChecks} from 'lucide-react';
 import type {Notebook} from '@/lib/types';
 import {PageHeader} from '@/app/Shell';
 import {linkProps, navigate} from '@/app/router';
@@ -10,6 +10,7 @@ import {DAYS, minutesOf, relativeDay, timeAgo, todayIso, weekday} from '@/lib/fo
 import {CoverView} from './CoverView';
 import {NotebookDialog} from './NotebookDialog';
 import {CoverEditor} from './CoverEditor';
+import {openGenerate} from '@/features/study/GenerateDialog';
 import {activeNotebooks, checkCapacity, createNotebook, deleteForever, duplicateNotebook, restoreNotebook, toggleFavorite, trashNotebook} from './actions';
 import {usePlan} from '@/lib/plan';
 import {PALETTE} from '@/lib/constants';
@@ -75,6 +76,9 @@ function NotebookCard({nb, mode, view, onEdit, onCover}: {nb: Notebook; mode: Mo
         {label: 'Aç', icon: <BookOpen size={17} />, onSelect: open},
         {label: 'Bilgileri düzenle / yeniden adlandır', icon: <PenLine size={17} />, onSelect: onEdit},
         {label: 'Kapağı tasarla', icon: <Palette size={17} />, onSelect: onCover},
+        {label: '🪄 Flashcard oluştur', icon: <Layers size={17} />, onSelect: () => openGenerate({kind: 'flashcards', source: {kind: 'notebook', id: nb.id}})},
+        {label: '🎯 Quiz oluştur', icon: <Target size={17} />, onSelect: () => openGenerate({kind: 'quiz', source: {kind: 'notebook', id: nb.id}})},
+        {label: '✨ Kalemlik AI’ya sor', icon: <Sparkles size={17} />, onSelect: () => navigate(`/ai?kaynak=notebook&id=${nb.id}`)},
         {label: nb.favorite ? 'Favorilerden çıkar' : 'Favorilere ekle', icon: <Star size={17} />, onSelect: () => toggleFavorite(nb)},
         {label: 'Kopyasını oluştur', icon: <Copy size={17} />, onSelect: () => void duplicateNotebook(nb, id => loadNotebookPages(id))},
         'sep',

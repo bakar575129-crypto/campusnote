@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   text: {font: 'nunito', size: 22, color: '#1b2433'},
   focus: {work: 25, short: 5, long: 15, every: 4, autoBreak: false, sound: true},
   recentColors: [],
+  studyGoal: 90,
 };
 
 let cache: {raw: unknown; value: UserSettings} | null = null;
@@ -64,6 +65,7 @@ export function resolveSettings(raw: Partial<UserSettings> | undefined): UserSet
     text: {...d.text, ...(s.text || {})},
     focus: {...d.focus, ...(s.focus || {})},
     recentColors: Array.isArray(s.recentColors) ? s.recentColors.slice(0, 12) : [],
+    studyGoal: Number.isFinite(s.studyGoal) && (s.studyGoal as number) >= 10 && (s.studyGoal as number) <= 900 ? Math.round(s.studyGoal as number) : d.studyGoal,
   };
 }
 

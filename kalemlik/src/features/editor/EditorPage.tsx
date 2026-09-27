@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
-import {ArrowLeft, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, ChevronUp, ClipboardPaste, Copy, CopyPlus, Download, FileImage, FileUp, Info, Layers, LayoutTemplate, Lock, LockOpen, Maximize, MoreHorizontal, Palette, PenLine, Plus, Redo2, ScanText, Star, Trash2, Undo2, Wand2, ZoomIn, ZoomOut, X, MoveHorizontal, Settings2, Hand as HandIcon} from 'lucide-react';
+import {Target, Sparkles, ArrowLeft, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, ChevronUp, ClipboardPaste, Copy, CopyPlus, Download, FileImage, FileUp, Info, Layers, LayoutTemplate, Lock, LockOpen, Maximize, MoreHorizontal, Palette, PenLine, Plus, Redo2, ScanText, Star, Trash2, Undo2, Wand2, ZoomIn, ZoomOut, X, MoveHorizontal, Settings2, Hand as HandIcon} from 'lucide-react';
 import type {Page, PageContent, Placed, Stroke, TextBox} from '@/lib/types';
 import {deviceOcrSupported, plausibleText, recognizeOnDevice, warmDeviceOcr} from './deviceOcr';
 import {INK_COLORS} from '@/lib/constants';
@@ -20,6 +20,7 @@ import {markOpened, toggleFavorite, trashNotebook} from '@/features/notebooks/ac
 import {StickerLibrary} from '@/features/stickers/StickerDialogs';
 import {PlacedLayer, placeSticker} from '@/features/stickers/PlacedLayer';
 import {ensureFont} from '@/features/fonts/fonts';
+import {openGenerate} from '@/features/study/GenerateDialog';
 import {History, type HistoryEntry, type PageSnap} from './history';
 import {PageCanvas, textHeight, type CanvasHandle} from './PageCanvas';
 import {TextLayer} from './TextLayer';
@@ -362,6 +363,23 @@ export default function EditorPage({id}: {id: string}) {
       else toast(`${r.error || 'Yazı tanınamadı.'} El yazın korunuyor.`, 'error');
     } finally { setBusy(''); }
   };
+  /** Sayfadaki el yazısını okuyup görünmez "aranabilir metin" olarak saklar (arama ve Kalemlik AI için; yazı değişmez). */
+  const makeSearchable = async () => {
+    if (!content || !page) return;
+    const strokes = content.strokes.filter(s => s.t === 'pen' && s.pen !== 'highlighter');
+    if (!strokes.length) return;
+    setBusy('El yazısı okunuyor…');
+    try {
+      const guide = writingGuide(content);
+      const lines = splitLines(strokes, guide.gap);
+      const parts: string[] = [];
+      for (const line of lines) { const r = await recognize(line, 'block', settings.write.engine, settings.write.lang); if ('text' in r && r.text.trim()) parts.push(r.text.trim()); }
+      if (!parts.length) { toast('El yazısı okunamadı. Yazı olduğu gibi duruyor.', 'error'); return; }
+      const now = latest(page.id)?.content;
+      if (now) commit({...now, searchText: parts.join('\n').slice(0, 60_000)}, page.id);
+      toast('Sayfa aranabilir yapıldı. El yazın değişmedi.', 'success');
+    } finally { setBusy(''); }
+  };
   const applyConvert = (replace: boolean) => {
     if (!convert || !content) return;
     const strokes = content.strokes.filter(s => convert.ids.includes(s.id));
@@ -485,6 +503,11 @@ export default function EditorPage({id}: {id: string}) {
     {label: 'Galeriden görsel ekle', icon: <ImagePlus size={17} />, onSelect: () => galleryInput.current?.click()},
     {label: 'Fotoğrafı sayfa yap', icon: <FileImage size={17} />, onSelect: () => imgInput.current?.click()},
     {label: 'PDF olarak indir', icon: <Download size={17} />, onSelect: () => void exportPdf()},
+    'sep',
+    {label: '🪄 Flashcard oluştur', icon: <Layers size={17} />, onSelect: () => openGenerate({kind: 'flashcards', source: {kind: 'notebook', id}})},
+    {label: '🎯 Quiz oluştur', icon: <Target size={17} />, onSelect: () => openGenerate({kind: 'quiz', source: {kind: 'notebook', id}})},
+    {label: '✨ Kalemlik AI’ya sor', icon: <Sparkles size={17} />, onSelect: () => navigate(`/ai?kaynak=notebook&id=${id}`)},
+    {label: 'Sayfayı aranabilir yap (el yazısını oku)', icon: <ScanText size={17} />, disabled: !content || !content.strokes.some(s => s.t === 'pen'), onSelect: () => void makeSearchable()},
     'sep',
     {label: 'Kapağı düzenle', icon: <Palette size={17} />, onSelect: () => setCoverEdit(true)},
     {label: 'Defter bilgileri / yeniden adlandır', icon: <Info size={17} />, onSelect: () => setInfo(true)},

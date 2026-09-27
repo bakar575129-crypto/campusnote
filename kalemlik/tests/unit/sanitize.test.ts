@@ -66,6 +66,18 @@ const junkRecord: Record<string, () => Record<string, unknown>> = {
   sticker: () => ({fileId: uuidv, name: junk(), width: junk(), height: junk()}),
   font: () => ({fileId: uuidv, name: junk(), missingChars: junk()}),
   settings: () => ({data: rnd() < 0.5 ? {theme: 'dark'} : junk()}),
+  deck: () => ({title: maybe('Türev'), course: junk(), color: maybe('#8b5cf6'), source: junk()}),
+  card: () => ({deckId: uuidv, front: maybe('Türev nedir?'), back: junk(), topic: junk(), ease: junk(), interval: junk(), due: junk(), reps: junk(), lapses: junk(), lastReviewAt: junk(), lastGrade: junk()}),
+  quiz: () => ({title: maybe('Quiz'), course: junk(), source: junk(), difficulty: maybe('hard'),
+    questions: rnd() < 0.1 ? junk() : Array.from({length: Math.floor(rnd() * 8)}, () => (rnd() < 0.1 ? junk() : {id: maybe('q1'), type: maybe('mcq'), prompt: maybe('Soru?'), options: rnd() < 0.3 ? junk() : [maybe('a'), maybe('b'), junk()], answer: maybe('a'), explanation: junk(), topic: junk()})),
+    result: rnd() < 0.4 ? junk() : {answers: rnd() < 0.3 ? junk() : {q1: maybe('a'), 'bad key!': 'x'}, correct: junk(), wrong: junk(), total: junk(), percent: junk(), weakTopics: junk(), finishedAt: junk()}, completedAt: junk()}),
+  studyPlan: () => ({title: maybe('Final planı'), course: junk(), examTaskId: maybe(uuidv), examDate: maybe('2026-06-20'), completedAt: junk(),
+    items: rnd() < 0.1 ? junk() : Array.from({length: Math.floor(rnd() * 6)}, () => (rnd() < 0.1 ? junk() : {id: maybe('i1'), date: maybe('2026-06-01'), topic: maybe('Türev'), minutes: maybe(60), kind: maybe('study'), done: junk(), taskId: maybe(uuidv)}))}),
+  gradeCourse: () => ({term: junk(), name: maybe('Fizik'), credit: maybe(3), ects: maybe(5), letter: maybe('BA'), included: junk(),
+    components: Array.from({length: Math.floor(rnd() * 5)}, () => (rnd() < 0.1 ? junk() : {id: maybe('c1'), name: maybe('Vize'), weight: maybe(40), score: maybe(60)}))}),
+  recording: () => ({title: maybe('Ders kaydı'), course: junk(), fileId: maybe(uuidv), durationMs: junk(), transcript: junk(), summary: junk(), notebookId: junk(),
+    bookmarks: Array.from({length: Math.floor(rnd() * 4)}, () => (rnd() < 0.1 ? junk() : {id: maybe('b1'), t: maybe(1000), label: junk()}))}),
+  journal: () => ({day: maybe('2026-09-26'), title: junk(), body: junk(), mood: maybe('happy')}),
 };
 
 test('rastgele bozuk kayıtlar onarıldıktan sonra sunucu şemasından her zaman geçer', () => {

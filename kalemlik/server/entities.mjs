@@ -4,7 +4,7 @@
 
 /** @typedef {{key:string,col:string,type:'str'|'num'|'bool'|'json'|'nullnum'}} Field */
 
-/** @type {Record<string,{table:string, fields:Field[], metaFields?:string[], fileRefs?:(d:any)=>string[]}>} */
+/** @type {Record<string,{table:string, fields:Field[], metaFields?:string[], fileRefs?:(d:any)=>string[], parent?:{key:string,table:string,message:string}}>} */
 export const ENTITIES = {
   notebook: {
     table: 'notebooks',
@@ -89,6 +89,91 @@ export const ENTITIES = {
       {key: 'missingChars', col: 'missing_chars', type: 'str'},
     ],
     fileRefs: d => [d.fileId],
+  },
+  // ---------------------------------------------------------------- 1.2 öğrenme merkezi
+  deck: {
+    table: 'flashcard_decks',
+    fields: [
+      {key: 'title', col: 'title', type: 'str'},
+      {key: 'course', col: 'course', type: 'str'},
+      {key: 'color', col: 'color', type: 'str'},
+      {key: 'source', col: 'source', type: 'str'},
+    ],
+  },
+  card: {
+    table: 'flashcards',
+    parent: {key: 'deckId', table: 'flashcard_decks', message: 'Kartın destesi sunucuda yok. Deste eşitlenince tekrar denenecek.'},
+    fields: [
+      {key: 'deckId', col: 'deck_id', type: 'str'},
+      {key: 'front', col: 'front', type: 'str'},
+      {key: 'back', col: 'back', type: 'str'},
+      {key: 'topic', col: 'topic', type: 'str'},
+      {key: 'ease', col: 'ease', type: 'num'},
+      {key: 'interval', col: 'interval_days', type: 'num'},
+      {key: 'due', col: 'due_at', type: 'num'},
+      {key: 'reps', col: 'reps', type: 'num'},
+      {key: 'lapses', col: 'lapses', type: 'num'},
+      {key: 'lastReviewAt', col: 'last_review_at', type: 'nullnum'},
+      {key: 'lastGrade', col: 'last_grade', type: 'num'},
+    ],
+  },
+  quiz: {
+    table: 'quizzes',
+    fields: [
+      {key: 'title', col: 'title', type: 'str'},
+      {key: 'course', col: 'course', type: 'str'},
+      {key: 'source', col: 'source', type: 'str'},
+      {key: 'difficulty', col: 'difficulty', type: 'str'},
+      {key: 'questions', col: 'questions', type: 'json'},
+      {key: 'result', col: 'result', type: 'json'},
+      {key: 'completedAt', col: 'completed_at', type: 'nullnum'},
+    ],
+  },
+  studyPlan: {
+    table: 'study_plans',
+    fields: [
+      {key: 'title', col: 'title', type: 'str'},
+      {key: 'course', col: 'course', type: 'str'},
+      {key: 'examTaskId', col: 'exam_task_id', type: 'str'},
+      {key: 'examDate', col: 'exam_date', type: 'str'},
+      {key: 'items', col: 'items', type: 'json'},
+      {key: 'completedAt', col: 'completed_at', type: 'nullnum'},
+    ],
+  },
+  gradeCourse: {
+    table: 'grade_courses',
+    fields: [
+      {key: 'term', col: 'term', type: 'str'},
+      {key: 'name', col: 'name', type: 'str'},
+      {key: 'credit', col: 'credit', type: 'num'},
+      {key: 'ects', col: 'ects', type: 'num'},
+      {key: 'components', col: 'components', type: 'json'},
+      {key: 'letter', col: 'letter', type: 'str'},
+      {key: 'included', col: 'included', type: 'bool'},
+    ],
+  },
+  recording: {
+    table: 'audio_recordings',
+    fields: [
+      {key: 'title', col: 'title', type: 'str'},
+      {key: 'course', col: 'course', type: 'str'},
+      {key: 'fileId', col: 'file_id', type: 'str'},
+      {key: 'durationMs', col: 'duration_ms', type: 'num'},
+      {key: 'bookmarks', col: 'bookmarks', type: 'json'},
+      {key: 'transcript', col: 'transcript', type: 'str'},
+      {key: 'summary', col: 'summary', type: 'str'},
+      {key: 'notebookId', col: 'notebook_id', type: 'str'},
+    ],
+    fileRefs: d => (d.fileId ? [d.fileId] : []),
+  },
+  journal: {
+    table: 'journal_entries',
+    fields: [
+      {key: 'day', col: 'day', type: 'str'},
+      {key: 'title', col: 'title', type: 'str'},
+      {key: 'body', col: 'body', type: 'str'},
+      {key: 'mood', col: 'mood', type: 'str'},
+    ],
   },
 };
 

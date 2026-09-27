@@ -9,9 +9,11 @@ import {formatBytes, timeAgo} from '@/lib/format';
 
 interface PlanInfo {id: string; name: string; storageBytes: number; notebookLimit: number | null; ocrDailyLimit: number; extraStorageBytes?: number; extraNotebooks?: number; subscription: null | {status: string; periodEnd: number; provider: string}}
 interface AdminUser {id: string; email: string; name: string; role: 'user' | 'admin'; createdAt: number; disabled: boolean; lastLoginAt: number | null; usedBytes: number; notebookCount: number; extraStorageMb: number; extraNotebooks: number; plan: PlanInfo}
-interface AdminPlan {id: string; name: string; storageMb: number; notebookLimit: number; ocrDailyLimit: number; priceMonthly: number; currency: string; active: boolean}
+interface PlanFeatures {aiFlashcards: boolean; aiQuiz: boolean; aiPlan: boolean; transcription: boolean; premiumTemplates: boolean; collaboration: boolean; maxCollaborators: number}
+interface AdminPlan {id: string; name: string; storageMb: number; notebookLimit: number; ocrDailyLimit: number; aiDailyLimit: number; features: PlanFeatures; priceMonthly: number; currency: string; active: boolean}
+const FEATURE_LABELS: [keyof PlanFeatures, string][] = [['aiFlashcards', 'AI flashcard'], ['aiQuiz', 'AI quiz'], ['aiPlan', 'AI çalışma planı'], ['transcription', 'Sunucuda ses → metin'], ['premiumTemplates', 'Premium şablonlar'], ['collaboration', 'Ortak defter']];
 interface Stats {users: {total: number; newThisWeek: number; activeThisWeek: number}; storageBytes: number; fileCount: number; notebooks: number; pages: number; subscriptions: {planId: string; count: number}[]}
-interface SystemInfo {ocr: {configured: boolean; provider: string | null; model: string; modelOverride: string; keyHint: string; lastError: null | {at: number; code: string; detail: string}}; mail: {configured: boolean; from: string}; version: string; registrationOpen: boolean}
+interface SystemInfo {ai: null | {configured: boolean; provider: string | null; model: string; modelOverride: string; lastError: null | {at: number; code: string; detail: string}}; ocr: {configured: boolean; provider: string | null; model: string; modelOverride: string; keyHint: string; lastError: null | {at: number; code: string; detail: string}}; mail: {configured: boolean; from: string}; version: string; registrationOpen: boolean}
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'İşlem yapılamadı.');
 
@@ -144,6 +146,8 @@ function PlansTab({plans, onChanged}: {plans: AdminPlan[]; onChanged: () => void
               <li>{formatBytes(p.storageMb * 1024 * 1024)} depolama</li>
               <li>{p.notebookLimit ? `${p.notebookLimit} defter` : 'Sınırsız defter'}</li>
               <li>Günde {p.ocrDailyLimit} sunucu tanıması</li>
+              <li>Günde {p.aiDailyLimit} Kalemlik AI isteği</li>
+              <li>{FEATURE_LABELS.filter(([k]) => p.features[k]).map(([, l]) => l).join(', ') || 'Ek özellik yok'}{p.features.collaboration ? ` (en fazla ${p.features.maxCollaborators} kişi)` : ''}</li>
               <li>{p.priceMonthly ? `${p.priceMonthly} ${p.currency} / ay` : 'Fiyat belirtilmedi'}</li>
             </ul>
             <Button onClick={() => setEdit({...p})}>Düzenle</Button>
@@ -153,7 +157,7 @@ function PlansTab({plans, onChanged}: {plans: AdminPlan[]; onChanged: () => void
       {edit && (
         <Dialog open onClose={() => setEdit(null)} title={`${edit.name} planı`} size="sm" footer={<><Button variant="ghost" onClick={() => setEdit(null)}>Vazgeç</Button><Button variant="primary" busy={busy} onClick={async () => {
           setBusy(true);
-          try { await api(`/api/admin/plans/${edit.id}`, {method: 'PUT', json: {name: edit.name, storageMb: edit.storageMb, notebookLimit: edit.notebookLimit, ocrDailyLimit: edit.ocrDailyLimit, priceMonthly: edit.priceMonthly, active: edit.active}}); toast('Plan güncellendi.', 'success'); setEdit(null); onChanged(); }
+          try { await api(`/api/admin/plans/${edit.id}`, {method: 'PUT', json: {name: edit.name, storageMb: edit.storageMb, notebookLimit: edit.notebookLimit, ocrDailyLimit: edit.ocrDailyLimit, aiDailyLimit: edit.aiDailyLimit, features: edit.features, priceMonthly: edit.priceMonthly, active: edit.active}}); toast('Plan güncellendi.', 'success'); setEdit(null); onChanged(); }
           catch (e) { toast(msg(e), 'error'); } finally { setBusy(false); }
         }}>Kaydet</Button></>}>
           <div className="stack">
@@ -161,6 +165,11 @@ function PlansTab({plans, onChanged}: {plans: AdminPlan[]; onChanged: () => void
             <Field label="Depolama (GB)" htmlFor="pl-gb"><input id="pl-gb" className="input" type="number" min={0.01} step={0.5} value={Math.round((edit.storageMb / 1024) * 100) / 100} onChange={e => setEdit({...edit, storageMb: Math.max(10, Math.round(Number(e.target.value) * 1024))})} /></Field>
             <Field label="Defter sınırı (0 = sınırsız)" htmlFor="pl-nb"><input id="pl-nb" className="input" type="number" min={0} value={edit.notebookLimit} onChange={e => setEdit({...edit, notebookLimit: Math.max(0, Math.floor(Number(e.target.value)))})} /></Field>
             <Field label="Günlük sunucu tanıma hakkı" htmlFor="pl-ocr"><input id="pl-ocr" className="input" type="number" min={0} value={edit.ocrDailyLimit} onChange={e => setEdit({...edit, ocrDailyLimit: Math.max(0, Math.floor(Number(e.target.value)))})} /></Field>
+            <Field label="Günlük Kalemlik AI hakkı" htmlFor="pl-ai" hint="Sohbet, özet, flashcard, quiz ve plan üretimi bu haktan düşer."><input id="pl-ai" className="input" type="number" min={0} value={edit.aiDailyLimit} onChange={e => setEdit({...edit, aiDailyLimit: Math.max(0, Math.floor(Number(e.target.value)))})} /></Field>
+            <div className="field"><label>Özellikler</label>
+              <div className="stack-tight">{FEATURE_LABELS.map(([k, l]) => <Switch key={k} label={l} checked={!!edit.features[k]} onChange={v => setEdit({...edit, features: {...edit.features, [k]: v}})} />)}</div>
+            </div>
+            {edit.features.collaboration && <Field label="Ortak defterde en fazla kişi" htmlFor="pl-collab"><input id="pl-collab" className="input" type="number" min={1} value={edit.features.maxCollaborators} onChange={e => setEdit({...edit, features: {...edit.features, maxCollaborators: Math.max(1, Math.floor(Number(e.target.value)))}})} /></Field>}
             <Field label={`Aylık fiyat (${edit.currency})`} htmlFor="pl-price"><input id="pl-price" className="input" type="number" min={0} step={1} value={edit.priceMonthly} onChange={e => setEdit({...edit, priceMonthly: Math.max(0, Number(e.target.value))})} /></Field>
             {edit.id !== 'free' && <Switch label="Plan satışta" checked={edit.active} onChange={active => setEdit({...edit, active})} />}
           </div>
@@ -174,9 +183,11 @@ function SystemTab() {
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [key, setKey] = useState('');
   const [model, setModel] = useState('');
+  const [aiModel, setAiModel] = useState('');
+  const [aiTest, setAiTest] = useState<{ok: boolean; ms: number; error?: string; detail?: string} | null>(null);
   const [busy, setBusy] = useState('');
   const [test, setTest] = useState<{ok: boolean; ms: number; text?: string; error?: string; detail?: string} | null>(null);
-  const load = async () => { try { const i = await api<SystemInfo>('/api/admin/system'); setInfo(i); setModel(i.ocr.modelOverride || ''); } catch (e) { toast(msg(e), 'error'); } };
+  const load = async () => { try { const i = await api<SystemInfo>('/api/admin/system'); setInfo(i); setModel(i.ocr.modelOverride || ''); setAiModel(i.ai?.modelOverride || ''); } catch (e) { toast(msg(e), 'error'); } };
   useEffect(() => { void load(); }, []);
   if (!info) return <p className="muted">Yükleniyor…</p>;
   const save = async (body: Record<string, string>) => {
@@ -186,7 +197,7 @@ function SystemTab() {
   return (
     <div className="stack">
       <section className="card card-pad settings-section">
-        <h2><ScanText size={20} /> El yazısı tanıma</h2>
+        <h2><ScanText size={20} /> El yazısı tanıma ve AI anahtarı</h2>
         <p className="muted small">API anahtarı olmadan da tanıma <b>cihazda</b> çalışır (internetsiz, ücretsiz). Anahtar girersen önce sunucudaki yapay zekâ tanıması denenir; daha dağınık el yazısında daha isabetlidir. Anthropic (<code>sk-ant-…</code>) veya OpenAI (<code>sk-…</code>) anahtarı kabul edilir; anahtar yalnızca sunucuda saklanır.</p>
         <div className="row wrap">
           <Badge tone={info.ocr.configured ? 'success' : 'neutral'}>{info.ocr.configured ? `Sunucu tanıması açık · ${info.ocr.provider === 'openai' ? 'OpenAI' : 'Anthropic'} ${info.ocr.keyHint}` : 'Sunucu tanıması kapalı · cihazda tanıma kullanılıyor'}</Badge>
@@ -206,6 +217,23 @@ function SystemTab() {
           ? <p className="notice notice-success small">✓ Tanıma hizmeti çalışıyor ({test.ms} ms).</p>
           : <p className="notice notice-warn small">✗ {test.error}{test.detail && <><br /><span className="muted">Sağlayıcının yanıtı: {test.detail}</span></>}</p>)}
       </section>
+      {info.ai && (
+        <section className="card card-pad settings-section">
+          <h2><Sparkles size={20} /> Kalemlik AI</h2>
+          <p className="muted small">Kalemlik AI (sohbet, özet, flashcard, quiz, çalışma planı, ders kaydı özeti) yukarıdaki API anahtarını kullanır. Anahtar yokken flashcard, quiz ve plan kural tabanlı üretilir. Kullanıcı başına günlük hak, <b>Planlar</b> sekmesinden ayarlanır.</p>
+          <div className="row wrap">
+            <Badge tone={info.ai.configured ? 'success' : 'neutral'}>{info.ai.configured ? `Açık · ${info.ai.provider === 'openai' ? 'OpenAI' : 'Anthropic'}` : 'Kapalı (API anahtarı yok)'}</Badge>
+            {info.ai.configured && <span className="muted small">Model: {info.ai.model}</span>}
+          </div>
+          {info.ai.lastError && <p className="notice notice-warn small">Son hata ({timeAgo(info.ai.lastError.at)}): {info.ai.lastError.code} — {info.ai.lastError.detail}</p>}
+          <Field label="AI modeli (isteğe bağlı)" htmlFor="sys-ai-model" hint="Boşsa varsayılan (Claude Opus 5 ya da OpenAI için gpt-4.1)."><input id="sys-ai-model" className="input" value={aiModel} placeholder={info.ai.model || 'varsayılan'} onChange={e => setAiModel(e.target.value)} /></Field>
+          <div className="row wrap">
+            <Button variant="primary" busy={busy === 'save'} onClick={() => void save({aiModel})}>Kaydet</Button>
+            <Button icon={<RefreshCw size={16} />} busy={busy === 'aitest'} disabled={!info.ai.configured} onClick={async () => { setBusy('aitest'); try { setAiTest(await api('/api/admin/system/ai-test', {method: 'POST'})); await load(); } catch (e) { toast(msg(e), 'error'); } finally { setBusy(''); } }}>Kalemlik AI'ı test et</Button>
+          </div>
+          {aiTest && (aiTest.ok ? <p className="notice notice-success small">✓ Kalemlik AI çalışıyor ({aiTest.ms} ms).</p> : <p className="notice notice-warn small">✗ {aiTest.error}{aiTest.detail && <><br /><span className="muted">Sağlayıcının yanıtı: {aiTest.detail}</span></>}</p>)}
+        </section>
+      )}
       <section className="card card-pad settings-section">
         <h2><Mail size={20} /> E-posta</h2>
         <p className="muted small">{info.mail.configured ? `SMTP ayarlı (gönderen: ${info.mail.from}).` : 'SMTP ayarlı değil. Şifre sıfırlama bağlantıları kullanıcı detayında sana gösterilir; kopyalayıp iletebilirsin. E-posta için .env dosyasındaki SMTP_* ayarlarını doldur.'}</p>

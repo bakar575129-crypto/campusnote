@@ -7,7 +7,7 @@ import {HttpError} from './errors.mjs';
 import {transaction} from './db.mjs';
 import {rateLimit} from './security.mjs';
 import {uuid} from './schemas.mjs';
-import {currentPlan} from './plans.mjs';
+import {currentPlan, planFeatures} from './plans.mjs';
 import {publicUser} from './auth.mjs';
 
 const MB = 1024 * 1024;
@@ -27,10 +27,12 @@ function testPng(w = 96, h = 32) {
 
 const subscriptionBody = z.object({planId: z.string().regex(/^[a-z0-9_-]{1,16}$/), days: z.number().int().min(1).max(3650).optional()});
 const grantsBody = z.object({extraStorageMb: z.number().int().min(0).max(10_000_000), extraNotebooks: z.number().int().min(0).max(100_000)});
-const planBody = z.object({name: z.string().trim().min(1).max(60), storageMb: z.number().int().min(10).max(10_000_000), notebookLimit: z.number().int().min(0).max(100_000), ocrDailyLimit: z.number().int().min(0).max(1_000_000), priceMonthly: z.number().min(0).max(1_000_000), active: z.boolean()});
-const settingsBody = z.object({ocrApiKey: z.string().trim().max(300).optional(), ocrModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional()});
+const planBody = z.object({name: z.string().trim().min(1).max(60), storageMb: z.number().int().min(10).max(10_000_000), notebookLimit: z.number().int().min(0).max(100_000), ocrDailyLimit: z.number().int().min(0).max(1_000_000), priceMonthly: z.number().min(0).max(1_000_000), active: z.boolean(),
+  aiDailyLimit: z.number().int().min(0).max(1_000_000).optional(),
+  features: z.object({aiFlashcards: z.boolean(), aiQuiz: z.boolean(), aiPlan: z.boolean(), transcription: z.boolean(), premiumTemplates: z.boolean(), collaboration: z.boolean(), maxCollaborators: z.number().int().min(0).max(10_000)}).partial().optional()});
+const settingsBody = z.object({ocrApiKey: z.string().trim().max(300).optional(), ocrModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional(), aiModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional()});
 
-export function createAdmin({pool, config, mailer, ocr, appSettings, createResetLink}) {
+export function createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink}) {
   const router = Router();
   router.use((req, res, next) => {
     if (req.user?.role !== 'admin') return next(new HttpError(403, 'Bu bölüm yalnızca yöneticiler içindir.', 'FORBIDDEN'));
@@ -137,7 +139,7 @@ export function createAdmin({pool, config, mailer, ocr, appSettings, createReset
   // ---- planlar
   router.get('/plans', async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM plans ORDER BY sort_order');
-    res.json({plans: rows.map(p => ({id: p.id, name: p.name, storageMb: Number(p.storage_mb), notebookLimit: Number(p.notebook_limit), ocrDailyLimit: Number(p.ocr_daily_limit), priceMonthly: Number(p.price_monthly), currency: p.currency, active: !!p.active}))});
+    res.json({plans: rows.map(p => ({id: p.id, name: p.name, storageMb: Number(p.storage_mb), notebookLimit: Number(p.notebook_limit), ocrDailyLimit: Number(p.ocr_daily_limit), aiDailyLimit: Number(p.ai_daily_limit ?? 20), features: planFeatures(p.features), priceMonthly: Number(p.price_monthly), currency: p.currency, active: !!p.active}))});
   });
   router.put('/plans/:id', async (req, res) => {
     const id = z.string().regex(/^[a-z0-9_-]{1,16}$/).parse(req.params.id);
@@ -145,18 +147,24 @@ export function createAdmin({pool, config, mailer, ocr, appSettings, createReset
     if (id === 'free' && !b.active) throw new HttpError(400, 'Ücretsiz plan kapatılamaz.');
     const [r] = await pool.execute('UPDATE plans SET name=?, storage_mb=?, notebook_limit=?, ocr_daily_limit=?, price_monthly=?, active=? WHERE id=?', [b.name, b.storageMb, b.notebookLimit, b.ocrDailyLimit, b.priceMonthly, b.active ? 1 : 0, id]);
     if (!r.affectedRows) throw new HttpError(404, 'Plan bulunamadı.');
+    if (b.aiDailyLimit !== undefined) await pool.execute('UPDATE plans SET ai_daily_limit=? WHERE id=?', [b.aiDailyLimit, id]);
+    if (b.features) {
+      const [[row]] = await pool.execute('SELECT features FROM plans WHERE id=?', [id]);
+      await pool.execute('UPDATE plans SET features=? WHERE id=?', [JSON.stringify({...planFeatures(row?.features), ...b.features}), id]);
+    }
     res.json({ok: true});
   });
 
   // ---- sistem: tanıma anahtarı, test, e-posta durumu
   router.get('/system', async (req, res) => {
-    res.json({ocr: ocr.status(), mail: {configured: mailer.configured, from: config.mail.from || ''}, version: config.version, registrationOpen: config.registrationOpen});
+    res.json({ocr: ocr.status(), ai: ai?.status() || null, mail: {configured: mailer.configured, from: config.mail.from || ''}, version: config.version, registrationOpen: config.registrationOpen});
   });
   router.put('/system', async (req, res) => {
     const b = settingsBody.parse(req.body);
     if (b.ocrApiKey !== undefined) await appSettings.set('ocr_api_key', b.ocrApiKey);
     if (b.ocrModel !== undefined) await appSettings.set('ocr_model', b.ocrModel);
-    res.json({ocr: ocr.status()});
+    if (b.aiModel !== undefined) await appSettings.set('ai_model', b.aiModel);
+    res.json({ocr: ocr.status(), ai: ai?.status() || null});
   });
   router.post('/system/ocr-test', async (req, res) => {
     await rateLimit(pool, 'ocr-test:' + req.user.id, 20, 60 * 60 * 1000);
@@ -166,6 +174,16 @@ export function createAdmin({pool, config, mailer, ocr, appSettings, createReset
       res.json({ok: true, ms: Date.now() - started, text, status: ocr.status()});
     } catch (error) {
       res.json({ok: false, ms: Date.now() - started, error: error.message, code: error.code || 'ERROR', detail: error.detail || '', status: ocr.status()});
+    }
+  });
+  router.post('/system/ai-test', async (req, res) => {
+    await rateLimit(pool, 'ai-test:' + req.user.id, 20, 60 * 60 * 1000);
+    const started = Date.now();
+    try {
+      const out = await ai.complete({system: 'Kısa yanıt ver.', messages: [{role: 'user', content: [{type: 'text', text: 'Sadece "hazır" yaz.'}]}], maxTokens: 400, effort: 'low'});
+      res.json({ok: true, ms: Date.now() - started, text: out.text.slice(0, 200), status: ai.status()});
+    } catch (error) {
+      res.json({ok: false, ms: Date.now() - started, error: error.message, code: error.code || 'ERROR', detail: error.detail || '', status: ai.status()});
     }
   });
   router.post('/system/mail-test', async (req, res) => {

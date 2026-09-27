@@ -146,7 +146,9 @@ export function put<E extends EntityName>(entity: E, draft: Draft<E>): EntityMap
   const data = {...draft, rev: prev?.rev ?? 0, createdAt: prev?.data.createdAt ?? draft.createdAt ?? now, updatedAt: now} as EntityMap[E];
   const rec: LocalRecord = {entity, id: draft.id, data, rev: prev?.rev ?? 0, dirty: true, deleted: false, version: (prev?.version ?? 0) + 1};
   table.set(draft.id, rec);
-  persist(rec);
+  // Sayfa içeriği (çizim sırasında çok sık değişir) kısa gecikmeyle, diğer küçük kayıtlar hemen cihaza yazılır:
+  // hemen ardından sekme kapanır ya da sayfa yenilenirse görev, kart, plan gibi değişiklikler kaybolmasın.
+  persist(rec, entity !== 'page');
   emitChange(entity);
   scheduleSync();
   return data;
@@ -261,7 +263,7 @@ export function syncNow(): Promise<void> {
   return syncing;
 }
 
-const PUSH_ORDER: EntityName[] = ['settings', 'notebook', 'sticker', 'font', 'lesson', 'task', 'focus', 'page'];
+const PUSH_ORDER: EntityName[] = ['settings', 'notebook', 'sticker', 'font', 'lesson', 'task', 'focus', 'page', 'deck', 'card', 'quiz', 'studyPlan', 'gradeCourse', 'recording', 'journal'];
 
 async function runSync() {
   if (!navigator.onLine) { setSyncState({phase: 'offline'}); return; }

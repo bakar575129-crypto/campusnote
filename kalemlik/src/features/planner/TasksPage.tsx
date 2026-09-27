@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {BookCheck, CheckCircle2, Circle, ClipboardList, GraduationCap, ListChecks, Plus, Trash2} from 'lucide-react';
+import {CalendarRange, BookCheck, CheckCircle2, Circle, ClipboardList, GraduationCap, ListChecks, Plus, Trash2} from 'lucide-react';
 import type {Task} from '@/lib/types';
 import type {TaskCategory} from '@/lib/constants';
 import {PALETTE} from '@/lib/constants';
@@ -9,6 +9,10 @@ import {confirmDialog, toast} from '@/components/feedback';
 import {list, put, remove, update, useList} from '@/lib/store';
 import {uuid} from '@/lib/ids';
 import {addDays, daysBetween, formatDate, isoDate, relativeDay, todayIso} from '@/lib/format';
+import {navigate} from '@/app/router';
+
+/** Sınav kaydından çalışma planı oluşturma penceresini açar (Çalışma → Planlar). */
+const openPlanFor = (examId: string) => navigate(`/calisma?bolum=plans&sinav=${examId}`);
 
 export const CATEGORY: Record<TaskCategory, {label: string; icon: typeof BookCheck}> = {
   homework: {label: 'Ödev', icon: BookCheck},
@@ -36,6 +40,7 @@ export function TaskDialog({draft, onClose}: {draft: Draft | null; onClose: () =
   return (
     <Dialog open onClose={onClose} title={exists ? 'Kaydı düzenle' : 'Yeni kayıt'} footer={<>
       {exists && <Button variant="ghost" className="danger-text" icon={<Trash2 size={17} />} onClick={async () => { if (await confirmDialog({title: 'Silinsin mi?', message: `"${v.title}" silinecek.`, confirmLabel: 'Sil', danger: true})) { remove('task', v.id); onClose(); } }}>Sil</Button>}
+      {exists && v.category === 'exam' && v.dueDate > todayIso() && <Button variant="ghost" icon={<CalendarRange size={17} />} onClick={() => { onClose(); openPlanFor(v.id); }}>Çalışma planı</Button>}
       <span className="spacer" />
       <Button variant="ghost" onClick={onClose}>Vazgeç</Button><Button variant="primary" onClick={save}>Kaydet</Button>
     </>}>

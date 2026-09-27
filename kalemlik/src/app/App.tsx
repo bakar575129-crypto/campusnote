@@ -13,6 +13,12 @@ import {SettingsPage} from '@/features/account/SettingsPage';
 import {AccountPage} from '@/features/account/AccountPage';
 import {PlanPage} from '@/features/account/PlanPage';
 import {AdminPage} from '@/features/admin/AdminPage';
+import {StudyPage} from '@/features/study/StudyPage';
+import {DeckPage} from '@/features/study/DeckPage';
+import {QuizPage} from '@/features/study/QuizPage';
+import {PlanPage as StudyPlanPage} from '@/features/study/PlanPage';
+import {GenerateHost} from '@/features/study/GenerateDialog';
+import {AiPage} from '@/features/ai/AiPage';
 import {onStoreEvent, useList} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
 import {setCustomFonts} from '@/features/fonts/fonts';
@@ -61,10 +67,15 @@ function Splash() {
 function SignedIn() {
   const {path} = useLocation();
   useTheme();
+  const {query} = useLocation();
   const editor = match('/defter/:id', path);
-  if (editor) return <Suspense fallback={<Splash />}><CustomFonts /><EditorPage id={editor.id} /></Suspense>;
+  if (editor) return <Suspense fallback={<Splash />}><CustomFonts /><EditorPage id={editor.id} /><GenerateHost /></Suspense>;
   let page;
-  switch (path) {
+  const deck = match('/calisma/deste/:id', path), quiz = match('/calisma/quiz/:id', path), plan = match('/calisma/plan/:id', path);
+  if (deck) page = <DeckPage key={deck.id} id={deck.id} />;
+  else if (quiz) page = <QuizPage key={quiz.id} id={quiz.id} />;
+  else if (plan) page = <StudyPlanPage key={plan.id} id={plan.id} advice={query.get('oneri') || undefined} />;
+  else switch (path) {
     case '/': case '/defterler': page = <NotebooksPage mode="all" />; break;
     case '/favoriler': page = <NotebooksPage mode="favorites" />; break;
     case '/cop': page = <NotebooksPage mode="trash" />; break;
@@ -76,9 +87,11 @@ function SignedIn() {
     case '/hesap': page = <AccountPage />; break;
     case '/plan': page = <PlanPage />; break;
     case '/yonetim': page = <AdminPage />; break;
+    case '/calisma': page = <StudyPage />; break;
+    case '/ai': page = <AiPage />; break;
     default: page = <NotebooksPage mode="all" />;
   }
-  return <Shell><CustomFonts />{page}</Shell>;
+  return <Shell><CustomFonts />{page}<GenerateHost /></Shell>;
 }
 
 export function App() {

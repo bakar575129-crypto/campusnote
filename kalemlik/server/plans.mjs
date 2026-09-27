@@ -1,5 +1,15 @@
 const MB = 1024 * 1024;
 
+/** Plan özellikleri: kayıtta olmayan özellik açık sayılır (eski veritabanlarında hiçbir şey kilitlenmesin). */
+export const FEATURE_DEFAULTS = {aiFlashcards: true, aiQuiz: true, aiPlan: true, transcription: false, premiumTemplates: false, collaboration: true, maxCollaborators: 3};
+export function planFeatures(raw) {
+  let f = {};
+  try { f = raw ? JSON.parse(raw) : {}; } catch { f = {}; }
+  const out = {...FEATURE_DEFAULTS};
+  for (const k of Object.keys(FEATURE_DEFAULTS)) if (typeof f[k] === typeof FEATURE_DEFAULTS[k]) out[k] = f[k];
+  return out;
+}
+
 /** Kullanıcının şu an geçerli planı: süresi dolmamış aktif/iptal edilmiş abonelik, yoksa ücretsiz plan. */
 export async function currentPlan(db, userId, now = Date.now()) {
   const [[sub]] = await db.execute(
@@ -26,6 +36,8 @@ function describe(plan, sub, extra = {storageMb: 0, notebooks: 0}) {
     extraStorageBytes: extra.storageMb * MB,
     extraNotebooks: extra.notebooks,
     ocrDailyLimit: Number(plan.ocr_daily_limit),
+    aiDailyLimit: Number(plan.ai_daily_limit ?? 20),
+    features: planFeatures(plan.features),
     subscription: sub ? {
       status: sub.status,
       periodEnd: Number(sub.current_period_end),
@@ -40,6 +52,7 @@ export async function listPlans(db) {
   return rows.map(p => ({
     id: p.id, name: p.name, storageBytes: Number(p.storage_mb) * MB,
     notebookLimit: Number(p.notebook_limit) || null, ocrDailyLimit: Number(p.ocr_daily_limit),
+    aiDailyLimit: Number(p.ai_daily_limit ?? 20), features: planFeatures(p.features),
     priceMonthly: Number(p.price_monthly), currency: p.currency,
   }));
 }

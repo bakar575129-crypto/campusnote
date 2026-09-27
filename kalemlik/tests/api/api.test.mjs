@@ -20,6 +20,20 @@ const env = {
 const config = readConfig(env);
 let pool, server, base;
 const fakeOcr = {configured: true, status: () => ({configured: true, provider: 'anthropic', model: 'test', keyHint: '…test', lastError: null}), async transcribe() { return 'merhaba dünya'; }};
+const aiCalls = [];
+const fakeAi = {
+  configured: true,
+  status: () => ({configured: true, provider: 'anthropic', model: 'test', lastError: null}),
+  async complete(req) {
+    aiCalls.push(req);
+    const last = req.messages.at(-1).content.map(c => c.text || '').join('\n');
+    if (last.includes('{"cards"')) return {text: 'İşte kartlar:\n```json\n{"cards":[{"front":"Mitoz nedir?","back":"Hücre bölünmesi","topic":"Hücre"},{"front":"","back":"boş"}]}\n```'};
+    if (last.includes('{"questions"')) return {text: '{"questions":[{"type":"mcq","prompt":"Mitoz kaç hücre verir?","options":["1","2","3","4"],"answer":"2","explanation":"İki özdeş hücre.","topic":"Hücre"},{"type":"tf","prompt":"DNA çekirdektedir.","answer":"Doğru"}]}'};
+    if (last.includes('{"items"')) return {text: '{"items":[{"date":"2099-01-01","topic":"Türev","minutes":60,"kind":"study"},{"date":"2000-01-01","topic":"eski","minutes":60,"kind":"study"},{"date":"2099-12-31","topic":"sınav günü","minutes":60,"kind":"study"}],"advice":"Düzenli çalış."}'};
+    if (last.includes('{"title"')) return {text: '{"title":"Özet","summary":"## Hücre\n- Mitoz","keyPoints":["Mitoz"],"topics":["Hücre"]}'};
+    return {text: `Yanıt: ${last.slice(0, 40)}`};
+  },
+};
 const mails = [];
 const fakeMailer = {configured: true, async send(m) { mails.push(m); return true; }};
 
@@ -32,7 +46,7 @@ before(async () => {
   await migrate(conn);
   await conn.end();
   pool = mysql.createPool(config.db);
-  const app = createApp({pool, config, ocr: fakeOcr, mailer: fakeMailer});
+  const app = createApp({pool, config, ocr: fakeOcr, ai: fakeAi, mailer: fakeMailer});
   await new Promise(r => { server = app.listen(0, r); });
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -42,10 +56,13 @@ after(async () => {
   await fs.rm(env.STORAGE_DIR, {recursive: true, force: true});
 });
 
+let clientNo = 0;
 function client() {
   let cookie = '';
+  // Her test istemcisi ayrı bir cihaz gibi (ayrı IP): kayıt/giriş hız sınırları testleri birbirine karıştırmasın.
+  const ip = `10.0.${Math.floor(++clientNo / 250)}.${clientNo % 250 + 1}`;
   return async function call(method, url, body, extraHeaders = {}) {
-    const headers = {'x-kalemlik': '1', origin: 'http://localhost:3999', ...extraHeaders};
+    const headers = {'x-kalemlik': '1', origin: 'http://localhost:3999', 'x-forwarded-for': ip, ...extraHeaders};
     if (cookie) headers.cookie = cookie;
     let payload;
     if (body instanceof FormData) payload = body;
@@ -362,4 +379,104 @@ test('hazır sticker ve galeri görseli sayfaya yerleşir', async () => {
   assert.equal(r.status, 200, 'kaynağı olmayan görsel atlanır, sayfa kaydedilir');
   const pages = (await c('GET', `/api/notebooks/${nb}/pages`)).body.pages;
   assert.deepEqual(pages.find(p => p.id === pg2).content.stickers.map(s => s.id), ['p1']);
+});
+
+test('öğrenme kayıtları: deste, kart (destesi olmadan yazılamaz), quiz, plan, not hesaplama, kayıt, günlük', async () => {
+  const c = client();
+  const reg = await c('POST', '/api/auth/register', {name: 'Ece', email: 'ece.ogrenme@ornek.com', password: 'guclu-sifre-555'});
+  assert.equal(reg.status, 201, JSON.stringify(reg.body));
+  const deck = randomUUID(), card = randomUUID();
+  const cardData = {deckId: deck, front: 'Mitoz nedir?', back: 'Hücre bölünmesi', topic: 'Hücre', ease: 2.5, interval: 0, due: 0, reps: 0, lapses: 0, lastReviewAt: null, lastGrade: -1};
+  let r = await c('PUT', `/api/sync/card/${card}`, {rev: 0, data: cardData});
+  assert.equal(r.status, 409);
+  assert.equal(r.body.code, 'MISSING_PARENT');
+  r = await c('PUT', `/api/sync/deck/${deck}`, {rev: 0, data: {title: 'Biyoloji', course: 'BIO101', color: '#8b5cf6', source: 'Defter'}});
+  assert.equal(r.status, 200);
+  r = await c('PUT', `/api/sync/card/${card}`, {rev: 0, data: cardData});
+  assert.equal(r.status, 200);
+  const quiz = {title: 'Hücre quizi', course: 'BIO101', source: '', difficulty: 'mixed', questions: [{id: 'q1', type: 'mcq', prompt: 'Soru', options: ['a', 'b'], answer: 'a', explanation: '', topic: 'Hücre'}], result: null, completedAt: null};
+  r = await c('PUT', `/api/sync/quiz/${randomUUID()}`, {rev: 0, data: quiz});
+  assert.equal(r.status, 200);
+  const plan = {title: 'Final planı', course: 'BIO101', examTaskId: '', examDate: '2026-06-20', items: [{id: 'i1', date: '2026-06-10', topic: 'Hücre', minutes: 60, kind: 'study', done: false, taskId: ''}], completedAt: null};
+  r = await c('PUT', `/api/sync/studyPlan/${randomUUID()}`, {rev: 0, data: plan});
+  assert.equal(r.status, 200);
+  r = await c('PUT', `/api/sync/gradeCourse/${randomUUID()}`, {rev: 0, data: {term: '2026 Güz', name: 'Fizik', credit: 3, ects: 5, components: [{id: 'v', name: 'Vize', weight: 40, score: 60}, {id: 'f', name: 'Final', weight: 60, score: null}], letter: '', included: true}});
+  assert.equal(r.status, 200);
+  r = await c('PUT', `/api/sync/recording/${randomUUID()}`, {rev: 0, data: {title: 'Fizik 3. hafta', course: 'Fizik', fileId: '', durationMs: 60000, bookmarks: [{id: 'b1', t: 30000, label: 'Önemli formül'}], transcript: 'Newton yasaları', summary: '', notebookId: ''}});
+  assert.equal(r.status, 200);
+  r = await c('PUT', `/api/sync/journal/${randomUUID()}`, {rev: 0, data: {day: '2026-09-27', title: 'Bugün', body: 'Çok çalıştım', mood: 'happy'}});
+  assert.equal(r.status, 200);
+  r = await c('GET', '/api/sync?since=0');
+  for (const e of ['deck', 'card', 'quiz', 'studyPlan', 'gradeCourse', 'recording', 'journal']) assert.equal(r.body.records[e].length, 1, e);
+  assert.equal(r.body.records.card[0].front, 'Mitoz nedir?');
+  // Başka kullanıcı bu kayıtları göremez, üzerine yazamaz
+  const other = client();
+  await other('POST', '/api/auth/register', {name: 'Kaan', email: 'kaan@ornek.com', password: 'guclu-sifre-666'});
+  r = await other('GET', '/api/sync?since=0');
+  assert.equal(r.body.records.deck.length, 0);
+  r = await other('PUT', `/api/sync/deck/${deck}`, {rev: 1, data: {title: 'Ele geçir', course: '', color: '#000000', source: ''}});
+  assert.equal(r.status, 409);
+  assert.equal(r.body.code, 'ID_TAKEN');
+  r = await other('PUT', `/api/sync/card/${randomUUID()}`, {rev: 0, data: cardData});
+  assert.equal(r.body.code, 'MISSING_PARENT', 'başkasının destesine kart eklenemez');
+});
+
+test('Kalemlik AI: sohbet geçmişi, kullanıcı verisiyle bağlam, içerik üretimi, izolasyon ve kota', async () => {
+  const c = client();
+  await c('POST', '/api/auth/register', {name: 'Deniz AI', email: 'deniz.ai@ornek.com', password: 'guclu-sifre-777'});
+  await c('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'Matematik Final', course: 'Matematik', description: '', dueDate: new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10), dueTime: '', category: 'exam', color: '#d9467a', done: false, completedAt: null}});
+  let r = await c('GET', '/api/ai/status');
+  assert.equal(r.body.configured, true);
+  assert.equal(r.body.usage.limit, 15);
+  r = await c('POST', '/api/ai/conversations', {});
+  const conv = r.body.conversation.id;
+  r = await c('POST', `/api/ai/conversations/${conv}/messages`, {text: 'Bu hafta ne çalışmalıyım?', context: {title: 'Türev notu', course: 'Matematik', text: 'Türev: anlık değişim', images: []}, contextLabel: 'Türev notu'});
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.messages.length, 2);
+  assert.equal(r.body.messages[1].role, 'assistant');
+  assert.equal(r.body.title, 'Bu hafta ne çalışmalıyım?');
+  const req = aiCalls.at(-1);
+  assert.match(req.system, /Matematik Final/, 'kullanıcının sınavı bağlamda');
+  assert.match(req.messages.at(-1).content.map(x => x.text || '').join(''), /<kaynak[^>]*>[\s\S]*Türev: anlık değişim/);
+  r = await c('GET', `/api/ai/conversations/${conv}/messages`);
+  assert.equal(r.body.messages.length, 2);
+  assert.equal(r.body.messages[0].meta.context, 'Türev notu');
+  // Başka kullanıcı bu sohbeti okuyamaz, yazamaz, silemez
+  const other = client();
+  await other('POST', '/api/auth/register', {name: 'Başkası', email: 'baska.ai@ornek.com', password: 'guclu-sifre-888'});
+  assert.equal((await other('GET', `/api/ai/conversations/${conv}/messages`)).status, 404);
+  assert.equal((await other('POST', `/api/ai/conversations/${conv}/messages`, {text: 'selam'})).status, 404);
+  await other('DELETE', `/api/ai/conversations/${conv}`);
+  assert.equal((await c('GET', '/api/ai/conversations')).body.conversations.length, 1, 'başkası silemez');
+
+  // İçerik üretimi: JSON kod bloğu içinde de olsa çıkarılır, geçersiz kart atlanır
+  r = await c('POST', '/api/ai/generate', {kind: 'flashcards', count: 5, source: {title: 'Hücre', text: 'Mitoz hücre bölünmesidir.'}});
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.cards, [{front: 'Mitoz nedir?', back: 'Hücre bölünmesi', topic: 'Hücre'}]);
+  r = await c('POST', '/api/ai/generate', {kind: 'quiz', count: 5, difficulty: 'hard', types: ['mcq', 'tf'], source: {title: 'Hücre', text: 'Mitoz hücre bölünmesidir.'}});
+  assert.equal(r.body.questions.length, 2);
+  assert.deepEqual(r.body.questions[1].options, ['Doğru', 'Yanlış']);
+  r = await c('POST', '/api/ai/generate', {kind: 'plan', plan: {examTitle: 'Final', examDate: '2099-12-31', startDate: '2099-01-01', minutesPerDay: 60, topics: ['Türev']}});
+  assert.deepEqual(r.body.items.map(i => i.topic), ['Türev'], 'plan yalnızca başlangıç ile sınav günü arasındaki maddeleri alır');
+  r = await c('POST', '/api/ai/generate', {kind: 'flashcards', source: {text: ''}});
+  assert.equal(r.status, 400, 'kaynaksız kart istenemez');
+  r = await c('POST', '/api/ai/generate', {kind: 'quiz', source: {images: ['data:image/gif;base64,AAAA']}});
+  assert.equal(r.status, 400, 'yalnızca png/jpeg/webp görüntü');
+
+  // Günlük kota: plan sınırına gelince 429, başarısız istek hak yemez
+  r = await c('GET', '/api/ai/status');
+  const used = r.body.usage.today;
+  assert.equal(used, 4, 'yalnızca başarılı üretimler hak kullanır');
+  await pool.execute("UPDATE plans SET ai_daily_limit=5 WHERE id='free'");
+  r = await c('POST', `/api/ai/conversations/${conv}/messages`, {text: 'bir tane daha'});
+  assert.equal(r.status, 200);
+  r = await c('POST', `/api/ai/conversations/${conv}/messages`, {text: 'sınırı aş'});
+  assert.equal(r.status, 429);
+  assert.equal(r.body.code, 'AI_QUOTA');
+  // Plan özelliği kapalıysa üretim reddedilir
+  await pool.execute("UPDATE plans SET ai_daily_limit=100, features=? WHERE id='free'", [JSON.stringify({aiQuiz: false})]);
+  r = await c('POST', '/api/ai/generate', {kind: 'quiz', source: {text: 'metin'}});
+  assert.equal(r.status, 403);
+  assert.equal(r.body.code, 'PLAN_FEATURE');
+  await pool.execute("UPDATE plans SET ai_daily_limit=15, features=? WHERE id='free'", [JSON.stringify({aiFlashcards: true, aiQuiz: true, aiPlan: true, transcription: false, premiumTemplates: false, collaboration: true, maxCollaborators: 3})]);
 });

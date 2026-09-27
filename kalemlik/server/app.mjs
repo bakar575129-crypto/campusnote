@@ -13,10 +13,12 @@ import {createOcr} from './ocr.mjs';
 import {currentPlan} from './plans.mjs';
 import {createAdmin} from './admin.mjs';
 import {createAppSettings} from './appSettings.mjs';
+import {createAi} from './ai.mjs';
+import {createAiRouter} from './aiRoutes.mjs';
 
-const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim'];
+const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai'];
 
-export function createApp({pool, config, appSettings = createAppSettings(pool), ocr = createOcr(config, {appSettings}), mailer = createMailer(config)}) {
+export function createApp({pool, config, appSettings = createAppSettings(pool), ocr = createOcr(config, {appSettings}), ai = createAi(config, {appSettings}), mailer = createMailer(config)}) {
   void appSettings.refresh();
   const app = express();
   app.disable('x-powered-by');
@@ -59,6 +61,8 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
     }
     next();
   });
+  // AI isteklerine seçilen not sayfalarının görüntüleri eklenebilir; bu yol için sınır daha yüksek.
+  app.use('/api/ai', express.json({limit: '40mb'}));
   app.use('/api', express.json({limit: '6mb'}));
 
   const auth = createAuth({pool, config, mailer});
@@ -71,6 +75,7 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
     version: config.version,
     registrationOpen: config.registrationOpen,
     ocrEnabled: ocr.configured,
+    aiEnabled: ai.configured,
     mailEnabled: mailer.configured,
     billingEnabled: !!config.billing.provider,
   }));
@@ -80,7 +85,8 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
   app.use('/api', auth.requireAuth);
   app.use('/api', createSync({pool}));
   app.use('/api', createFiles({pool, config}));
-  app.use('/api/admin', createAdmin({pool, config, mailer, ocr, appSettings, createResetLink: auth.createResetLink}));
+  app.use('/api/admin', createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink: auth.createResetLink}));
+  app.use('/api/ai', createAiRouter({pool, ai}));
 
   app.post('/api/ocr', async (req, res) => {
     const image = typeof req.body?.image === 'string' ? req.body.image : '';

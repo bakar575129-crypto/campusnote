@@ -24,6 +24,19 @@ const MIGRATIONS = [
       updated_at BIGINT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
   }},
+  {version: 3, name: 'öğrenme merkezi: AI kotası, plan özellikleri, ortak defter izleri', async up(db) {
+    await addColumn(db, 'plans', 'ai_daily_limit', 'INT UNSIGNED NOT NULL DEFAULT 20');
+    await addColumn(db, 'plans', 'features', 'TEXT NULL');
+    // Varsayılanlar: özellikler sabit kodlanmaz, yönetim panelinden plan plan değiştirilebilir.
+    const defaults = {
+      free: {ai: 15, features: {aiFlashcards: true, aiQuiz: true, aiPlan: true, transcription: false, premiumTemplates: false, collaboration: true, maxCollaborators: 3}},
+      plus: {ai: 150, features: {aiFlashcards: true, aiQuiz: true, aiPlan: true, transcription: true, premiumTemplates: true, collaboration: true, maxCollaborators: 20}},
+      pro: {ai: 600, features: {aiFlashcards: true, aiQuiz: true, aiPlan: true, transcription: true, premiumTemplates: true, collaboration: true, maxCollaborators: 100}},
+    };
+    for (const [id, d] of Object.entries(defaults)) await db.query('UPDATE plans SET ai_daily_limit=?, features=? WHERE id=? AND features IS NULL', [d.ai, JSON.stringify(d.features), id]);
+    await addColumn(db, 'notebooks', 'updated_by', "VARCHAR(36) CHARACTER SET ascii NOT NULL DEFAULT ''");
+    await addColumn(db, 'notebook_pages', 'updated_by', "VARCHAR(36) CHARACTER SET ascii NOT NULL DEFAULT ''");
+  }},
 ];
 
 export async function migrate(db) {

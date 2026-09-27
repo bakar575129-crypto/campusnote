@@ -70,3 +70,35 @@ test('OCR: OpenAI anahtarı ve bakiye hatası anlaşılır bildirilir', async ()
   await assert.rejects(ocr.transcribe('AAAA', 'word'), e => e.code === 'OCR_BILLING' && /bakiye/.test(e.message));
   assert.match(ocr.status().lastError.detail, /insufficient_quota/);
 });
+
+import {createAi, extractJson} from '../../server/ai.mjs';
+
+test('Kalemlik AI: yedek model, varsayılan yedek (fallbacks), düşünme ayarı ve görsel içerik', async () => {
+  const calls = [];
+  const create = kind => async params => {
+    calls.push({kind, ...params});
+    if (params.model === 'claude-opus-5' && kind === 'beta') throw new Anthropic.NotFoundError(404, {type: 'error', error: {type: 'not_found_error', message: 'model not found'}}, 'model not found', new Headers());
+    return {stop_reason: 'end_turn', content: [{type: 'text', text: 'hazır'}]};
+  };
+  const ai = createAi({ocr: {apiKey: 'sk-ant-env', model: 'claude-opus-5', openaiKey: '', openaiModel: ''}, ai: {model: 'claude-opus-5'}}, {anthropicFactory: () => ({beta: {messages: {create: create('beta')}}, messages: {create: create('std')}})});
+  const out = await ai.complete({system: 's', messages: [{role: 'user', content: [{type: 'image', mediaType: 'image/png', data: 'AAAA'}, {type: 'text', text: 'merhaba'}]}], effort: 'low'});
+  assert.equal(out.text, 'hazır');
+  assert.equal(calls[0].kind, 'beta');
+  assert.deepEqual(calls[0].betas, ['server-side-fallback-2026-07-01']);
+  assert.equal(calls[0].fallbacks, 'default');
+  assert.deepEqual(calls[0].output_config, {effort: 'low'});
+  assert.equal(calls[0].messages[0].content[0].source.media_type, 'image/png');
+  assert.equal(calls[1].model, 'claude-sonnet-5', 'model yoksa sıradaki model');
+  assert.equal(calls[1].kind, 'std');
+});
+
+test('Kalemlik AI: anahtar yoksa AI_DISABLED, ret durumunda anlaşılır hata, JSON ayıklama', async () => {
+  const off = createAi({ocr: {apiKey: '', model: '', openaiKey: '', openaiModel: ''}});
+  assert.equal(off.configured, false);
+  await assert.rejects(off.complete({system: '', messages: []}), e => e.code === 'AI_DISABLED');
+  const refused = createAi({ocr: {apiKey: 'sk-ant-x', model: '', openaiKey: '', openaiModel: ''}, ai: {model: 'claude-haiku-4-5'}}, {anthropicFactory: () => ({messages: {create: async () => ({stop_reason: 'refusal', content: []})}})});
+  await assert.rejects(refused.complete({system: '', messages: [{role: 'user', content: [{type: 'text', text: 'x'}]}]}), e => e.code === 'AI_REFUSED');
+  assert.deepEqual(extractJson('Tabii!\n```json\n{"a": [1, 2]}\n```\nİyi çalışmalar.'), {a: [1, 2]});
+  assert.deepEqual(extractJson('önce {"b": "}"} sonra'), {b: '}'});
+  assert.throws(() => extractJson('json yok'), e => e.code === 'AI_FORMAT');
+});

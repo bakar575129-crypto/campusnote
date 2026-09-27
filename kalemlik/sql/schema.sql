@@ -260,4 +260,261 @@ CREATE TABLE IF NOT EXISTS ocr_usage (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- ================================================================ 1.2: öğrenme merkezi
+
+CREATE TABLE IF NOT EXISTS flashcard_decks (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  course VARCHAR(120) NOT NULL DEFAULT '',
+  color CHAR(7) CHARACTER SET ascii NOT NULL,
+  source VARCHAR(300) NOT NULL DEFAULT '',        -- kartların üretildiği kaynak (defter, PDF, kayıt…)
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX flashcard_decks_user_updated (user_id, updated_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS flashcards (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  deck_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  front TEXT NOT NULL,
+  back TEXT NOT NULL,
+  topic VARCHAR(120) NOT NULL DEFAULT '',
+  ease DOUBLE NOT NULL DEFAULT 2.5,                -- aralıklı tekrar (SM-2) kolaylık katsayısı
+  interval_days DOUBLE NOT NULL DEFAULT 0,
+  due_at BIGINT NOT NULL DEFAULT 0,
+  reps INT UNSIGNED NOT NULL DEFAULT 0,
+  lapses INT UNSIGNED NOT NULL DEFAULT 0,
+  last_review_at BIGINT NULL,
+  last_grade TINYINT NOT NULL DEFAULT -1,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX flashcards_user_updated (user_id, updated_at),
+  INDEX flashcards_deck (deck_id),
+  INDEX flashcards_user_due (user_id, due_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  , FOREIGN KEY (deck_id) REFERENCES flashcard_decks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS flashcard_reviews (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  card_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  grade TINYINT NOT NULL,                          -- 0 tekrar · 1 zor · 2 orta · 3 kolay
+  reviewed_at BIGINT NOT NULL,
+  INDEX flashcard_reviews_user (user_id, reviewed_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS quizzes (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  course VARCHAR(120) NOT NULL DEFAULT '',
+  source VARCHAR(300) NOT NULL DEFAULT '',
+  difficulty VARCHAR(8) CHARACTER SET ascii NOT NULL DEFAULT 'mixed',
+  questions MEDIUMTEXT NOT NULL,                   -- JSON: sorular (çoktan seçmeli, doğru/yanlış, boşluk doldurma)
+  result MEDIUMTEXT NOT NULL,                      -- JSON: cevaplar, puan, yanlış konular (null: çözülmedi)
+  completed_at BIGINT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX quizzes_user_updated (user_id, updated_at),
+  INDEX quizzes_user_completed (user_id, completed_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS study_plans (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  course VARCHAR(120) NOT NULL DEFAULT '',
+  exam_task_id VARCHAR(36) CHARACTER SET ascii NOT NULL DEFAULT '',
+  exam_date CHAR(10) CHARACTER SET ascii NOT NULL,
+  items MEDIUMTEXT NOT NULL,                       -- JSON: gün gün çalışma görevleri
+  completed_at BIGINT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX study_plans_user_updated (user_id, updated_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS grade_courses (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  term VARCHAR(60) NOT NULL DEFAULT '',
+  name VARCHAR(120) NOT NULL,
+  credit DOUBLE NOT NULL DEFAULT 0,
+  ects DOUBLE NOT NULL DEFAULT 0,
+  components TEXT NOT NULL,                        -- JSON: [{ad, ağırlık %, not}] (vize, final, ödev, quiz…)
+  letter VARCHAR(4) NOT NULL DEFAULT '',           -- elle girilen harf notu (boş: hesaplanır)
+  included TINYINT(1) NOT NULL DEFAULT 1,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX grade_courses_user_updated (user_id, updated_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS audio_recordings (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  course VARCHAR(120) NOT NULL DEFAULT '',
+  file_id VARCHAR(36) CHARACTER SET ascii NOT NULL DEFAULT '',
+  duration_ms INT UNSIGNED NOT NULL DEFAULT 0,
+  bookmarks TEXT NOT NULL,                         -- JSON: [{zaman, not}]
+  transcript MEDIUMTEXT NOT NULL,                  -- ses → metin (audio_transcriptions yerine kaydın içinde)
+  summary MEDIUMTEXT NOT NULL,
+  notebook_id VARCHAR(36) CHARACTER SET ascii NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX audio_recordings_user_updated (user_id, updated_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS journal_entries (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  day CHAR(10) CHARACTER SET ascii NOT NULL,
+  title VARCHAR(160) NOT NULL DEFAULT '',
+  body MEDIUMTEXT NOT NULL,
+  mood VARCHAR(12) CHARACTER SET ascii NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  rev INT UNSIGNED NOT NULL,
+  INDEX journal_entries_user_updated (user_id, updated_at),
+  INDEX journal_user_day (user_id, day),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ai_conversations (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  title VARCHAR(160) NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  INDEX ai_conversations_user (user_id, updated_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ai_messages (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+  conversation_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  role VARCHAR(10) CHARACTER SET ascii NOT NULL,   -- user | assistant
+  content MEDIUMTEXT NOT NULL,
+  meta TEXT NOT NULL,                              -- JSON: seçilen kaynaklar vb.
+  created_at BIGINT NOT NULL,
+  INDEX ai_messages_conversation (conversation_id, created_at),
+  FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ai_usage (
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  day CHAR(10) CHARACTER SET ascii NOT NULL,
+  count INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, day),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------- ortak defter ve paylaşım
+CREATE TABLE IF NOT EXISTS notebook_members (
+  notebook_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  role VARCHAR(8) CHARACTER SET ascii NOT NULL,    -- viewer | editor
+  status VARCHAR(8) CHARACTER SET ascii NOT NULL,  -- pending | accepted
+  invited_by CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  PRIMARY KEY (notebook_id, user_id),
+  INDEX notebook_members_user (user_id, status),
+  FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS notebook_activity (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  notebook_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  action VARCHAR(24) CHARACTER SET ascii NOT NULL,
+  detail VARCHAR(200) NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  INDEX notebook_activity_nb (notebook_id, created_at),
+  FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS share_links (
+  id CHAR(22) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,   -- tahmin edilemez bağlantı kimliği
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  notebook_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  page_id VARCHAR(36) CHARACTER SET ascii NOT NULL DEFAULT '',     -- boş: bütün defter
+  visibility VARCHAR(8) CHARACTER SET ascii NOT NULL,              -- private | link | public
+  allow_download TINYINT(1) NOT NULL DEFAULT 1,
+  views INT UNSIGNED NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  INDEX share_links_user (user_id),
+  INDEX share_links_public (visibility, updated_at),
+  FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------- şablon mağazası
+CREATE TABLE IF NOT EXISTS templates (
+  id VARCHAR(40) CHARACTER SET ascii PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  category VARCHAR(40) NOT NULL,
+  description VARCHAR(500) NOT NULL DEFAULT '',
+  premium TINYINT(1) NOT NULL DEFAULT 0,
+  price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  uses INT UNSIGNED NOT NULL DEFAULT 0,
+  content MEDIUMTEXT NOT NULL,                     -- JSON: kâğıt, renkler, kapak, sayfalar
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order INT NOT NULL DEFAULT 0,
+  builtin TINYINT(1) NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  INDEX templates_category (active, category, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS template_purchases (
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  template_id VARCHAR(40) CHARACTER SET ascii NOT NULL,
+  price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL,
+  PRIMARY KEY (user_id, template_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------- XP ve rozetler (kurallar sunucuda, bkz. server/xp.mjs)
+CREATE TABLE IF NOT EXISTS xp_transactions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  amount INT NOT NULL,
+  reason VARCHAR(24) CHARACTER SET ascii NOT NULL,
+  ref VARCHAR(64) CHARACTER SET ascii NOT NULL,
+  day CHAR(10) CHARACTER SET ascii NOT NULL,
+  created_at BIGINT NOT NULL,
+  UNIQUE KEY xp_once (user_id, reason, ref),
+  INDEX xp_user_day (user_id, day),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_badges (
+  user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  badge_id VARCHAR(24) CHARACTER SET ascii NOT NULL,
+  earned_at BIGINT NOT NULL,
+  PRIMARY KEY (user_id, badge_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 INSERT IGNORE INTO schema_migrations (version, applied_at) VALUES (1, UNIX_TIMESTAMP()*1000);

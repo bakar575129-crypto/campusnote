@@ -35,6 +35,7 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/app.css';
 import './styles/editor.css';
+import './styles/learn.css';
 import {App} from './app/App';
 import {bootstrap} from './app/session';
 

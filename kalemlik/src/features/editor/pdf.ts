@@ -48,7 +48,9 @@ export async function importPdf(file: File, onProgress: (done: number, total: nu
       await page.render({canvasContext: ctx, viewport: vp, canvas}).promise;
       const blob = await canvasBlob(canvas, 'image/jpeg', 0.88);
       const fileId = await saveFile(blob, 'page', `${file.name.replace(/\.pdf$/i, '')}-s${i}.jpg`);
-      pages.push({v: 1, template: 'blank', width, height: Math.max(300, Math.min(3000, height)), background: {fileId, kind: 'pdf'}, strokes: [], texts: [], stickers: []});
+      // PDF'in metin katmanı aranabilir metin olarak saklanır (arama ve Kalemlik AI için; taranmış PDF'lerde boştur).
+      const searchText = await page.getTextContent().then(tc => tc.items.map(it => ('str' in it ? it.str + (it.hasEOL ? '\n' : ' ') : '')).join('').replace(/[ \t]+/g, ' ').trim().slice(0, 60_000)).catch(() => '');
+      pages.push({v: 1, template: 'blank', width, height: Math.max(300, Math.min(3000, height)), background: {fileId, kind: 'pdf'}, ...(searchText ? {searchText} : {}), strokes: [], texts: [], stickers: []});
       page.cleanup();
     }
     onProgress(doc.numPages, doc.numPages);
