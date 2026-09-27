@@ -57,6 +57,8 @@ const photo = path.join(tmp, 'tahta.jpg');
 await fs.writeFile(photo, Buffer.from(png, 'base64'));
 await page.locator('input[type=file][accept="image/*"]').setInputFiles(photo);
 await page.waitForFunction(() => document.querySelectorAll('.placed').length === 2);
+// Seçim çerçevesi yeni görsele geçene kadar bekle (önceki sticker 120 px, galeri görseli daha geniş).
+await page.waitForFunction(() => (document.querySelector('.placed-frame')?.getBoundingClientRect().width || 0) > 200);
 const frame = page.locator('.placed-frame');
 const before = await frame.boundingBox();
 await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
