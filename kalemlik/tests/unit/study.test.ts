@@ -143,3 +143,25 @@ test('GANO: kredi ağırlıklı; kalınan ders AKTS kazandırmaz; hariç tutulan
   assert.equal(r.ects, 14);
   assert.equal(r.counted, 4);
 });
+
+import {mergePage} from '@/lib/merge';
+import type {PageContent, Stroke} from '@/lib/types';
+
+const st = (id: string, x = 0): Stroke => ({id, t: 'pen', pen: 'ballpoint', c: '#000000', w: 2, o: 1, pts: [x, 0, 0.5, x + 10, 10, 0.5]});
+const pc = (strokes: Stroke[], extra: Partial<PageContent> = {}): PageContent => ({v: 1, template: 'lined', width: 1000, height: 1414, strokes, texts: [], stickers: [], ...extra});
+
+test('sayfa birleştirme: iki kişinin eklediği korunur, silinen silinir, çakışmada son düzenleyen kazanır', () => {
+  const base = pc([st('a'), st('b'), st('c')]);
+  const mine = pc([st('a', 5), st('b'), st('m')]); // a'yı taşıdım, c'yi sildim, m ekledim
+  const theirs = pc([st('a'), st('b', 7), st('c'), st('t')], {template: 'grid'}); // b'yi değiştirdi, t ekledi, şablon değişti
+  const out = mergePage(base, mine, theirs);
+  assert.deepEqual(out.strokes.map(s => s.id), ['a', 'b', 't', 'm']);
+  assert.equal(out.strokes[0].pts[0], 5, 'benim değişikliğim');
+  assert.equal(out.strokes[1].pts[0], 7, 'onun değişikliği');
+  assert.equal(out.template, 'grid', 'yalnızca onun değiştirdiği sayfa ayarı');
+  // Ben sildim, o değiştirdi → onun değişikliği korunur
+  const out2 = mergePage(base, pc([st('b'), st('c')]), pc([st('a', 9), st('b'), st('c')]));
+  assert.deepEqual(out2.strokes.map(s => s.id), ['a', 'b', 'c']);
+  // Başlangıç bilinmiyorsa hiçbir şey kaybolmaz
+  assert.deepEqual(mergePage(null, pc([st('x')]), pc([st('y')])).strokes.map(s => s.id), ['y', 'x']);
+});

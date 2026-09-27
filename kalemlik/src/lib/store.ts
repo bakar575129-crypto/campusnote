@@ -9,6 +9,7 @@ import {uuid} from './ids';
 import type {EntityMap, EntityName, Page, PageContent} from './types';
 import {ENTITY_NAMES} from './types';
 import {sanitizeRecord} from './sanitize';
+import {mergePage} from './merge';
 import {pendingUploadIds, setFilesUser, uploadPending} from './files';
 
 export interface LocalRecord<E extends EntityName = EntityName> {
@@ -173,8 +174,27 @@ export function remove(entity: EntityName, id: string) {
 
 // ---------------------------------------------------------------- oturum
 
+// ---------------------------------------------------------------- ortak defterler
+/** Ortak defterlerdeki rolüm: owner (başkalarıyla paylaştığım kendi defterim), editor, viewer. */
+export interface CollabInfo {role: 'owner' | 'editor' | 'viewer'; owner: string}
+let collab = new Map<string, CollabInfo>();
+const collabSubs = new Set<() => void>();
+const setCollab = (next: Map<string, CollabInfo>) => { collab = next; for (const f of collabSubs) f(); };
+export const getCollab = (notebookId: string) => collab.get(notebookId);
+export function useCollab(notebookId: string | undefined): CollabInfo | undefined {
+  return useSyncExternalStore(fn => { collabSubs.add(fn); return () => { collabSubs.delete(fn); }; }, () => (notebookId ? collab.get(notebookId) : undefined));
+}
+export function useCollabMap(): Map<string, CollabInfo> {
+  return useSyncExternalStore(fn => { collabSubs.add(fn); return () => { collabSubs.delete(fn); }; }, () => collab);
+}
+/** Davet kabul edildikten sonra: ortak defterin kayıtları hemen gelsin. */
+export function refreshCollab() { scheduleSync(100); }
+/** Uzakta silinen sayfayı (ortak defter) bu cihazdan kaldırır. */
+export function applyRemoteDeletion(entity: EntityName, id: string) { if (getRecord(entity, id)) { removeLocal(entity, id); emitChange(entity); } }
+
 export async function loadUser(id: string) {
   userId = id;
+  setCollab(new Map(((await idbGet<[string, CollabInfo][]>('meta', `${id}|collab`).catch(() => undefined)) || [])));
   await setFilesUser(id);
   for (const t of tables.values()) t.clear();
   loadedNotebooks.clear();
@@ -201,6 +221,41 @@ export function hasUnsyncedChanges() { return countPending() > 0 || pendingUploa
 
 // ---------------------------------------------------------------- sayfalar
 
+// Sayfa birleştirme için her sayfanın "sunucudaki son bilinen sürümü" (üç yönlü birleştirmenin başlangıcı).
+const bases = new Map<string, {rev: number; content: PageContent}>();
+const bkey = (id: string) => `${userId}|base|${id}`;
+function setBase(id: string, rev: number, content: PageContent | undefined) {
+  if (!content || !userId) return;
+  bases.set(id, {rev, content});
+  void idbPut('meta', bkey(id), {rev, content}).catch(() => {});
+}
+async function getBase(id: string, rev: number): Promise<PageContent | null> {
+  const m = bases.get(id) ?? await idbGet<{rev: number; content: PageContent}>('meta', bkey(id)).catch(() => undefined);
+  return m && m.rev === rev ? m.content : null;
+}
+
+/** Başka bir yerden (ortak defterde başka kişi, başka cihaz) gelen sayfa sürümünü uygular; yereldeki düzenleme varsa birleştirir. */
+export async function applyRemotePage(server: Page) {
+  if (!userId || !server.content) return;
+  const local = getRecord('page', server.id);
+  if (local && local.rev === server.rev) return;
+  if (local?.dirty && (local.data as Page).content) {
+    const base = await getBase(server.id, local.rev);
+    const cur = getRecord('page', server.id)!;
+    const merged = mergePage(base, (cur.data as Page).content!, server.content);
+    setBase(server.id, server.rev, server.content);
+    const rec: LocalRecord = {...cur, data: {...server, position: (cur.data as Page).position, content: merged}, rev: server.rev, dirty: true, version: cur.version + 1};
+    tables.get('page')!.set(server.id, rec);
+    persist(rec, true);
+  } else {
+    setBase(server.id, server.rev, server.content);
+    const rec: LocalRecord = {entity: 'page', id: server.id, data: server, rev: server.rev, dirty: false, deleted: false, version: local?.version ?? 0};
+    tables.get('page')!.set(server.id, rec);
+    persist(rec, true);
+  }
+  emitChange('page');
+}
+
 /** Defteri açarken sayfa içeriklerini önce cihazdan, bağlantı varsa sunucudan getirir. */
 export async function loadNotebookPages(notebookId: string, force = false): Promise<void> {
   if (!userId) return;
@@ -224,6 +279,7 @@ export async function loadNotebookPages(notebookId: string, force = false): Prom
       const rec: LocalRecord = {entity: 'page', id: server.id, data: server, rev: server.rev, dirty: false, deleted: false, version: local?.version ?? 0};
       tables.get('page')!.set(server.id, rec);
       persist(rec, true);
+      setBase(server.id, server.rev, server.content);
     }
     // Sunucuda olmayan ve yerelde temiz (gönderilmiş) sayfalar başka cihazda silinmiştir.
     const ids = new Set(res.pages.map(p => p.id));
@@ -329,7 +385,9 @@ async function pushRecord(rec: LocalRecord) {
       if (!content) return; // içerik bu cihazda yoksa gönderilecek bir şey de yoktur
       rec.data = {...(rec.data as Page), content};
     }
-    const res = await api<{rev: number; updatedAt: number}>(url, {method: 'PUT', json: pushBody(rec)});
+    const body = pushBody(rec);
+    const res = await api<{rev: number; updatedAt: number}>(url, {method: 'PUT', json: body});
+    if (rec.entity === 'page') setBase(rec.id, res.rev, (body.data as {content?: PageContent}).content);
     const cur = getRecord(rec.entity, rec.id);
     if (!cur) return;
     cur.rev = res.rev;
@@ -347,7 +405,11 @@ async function pushRecord(rec: LocalRecord) {
 
 async function handlePushError(rec: LocalRecord, error: ApiError) {
   const current = error.body.current as EntityMap[EntityName] | undefined;
-  if (error.code === 'CONFLICT' && current) { resolveConflict(rec, current); return; }
+  if (error.code === 'CONFLICT' && current) {
+    if (rec.entity === 'page' && !rec.deleted && (rec.data as Page).content && (current as Page).content) { await mergeConflict(rec, current as Page); return; }
+    resolveConflict(rec, current);
+    return;
+  }
   if (error.code === 'NOTEBOOK_LIMIT') {
     // Defter silinmez: çöp kutusuna alınır, kullanıcı yer açınca geri getirebilir.
     const nb = rec.data as EntityMap['notebook'];
@@ -359,6 +421,14 @@ async function handlePushError(rec: LocalRecord, error: ApiError) {
     return;
   }
   if (error.code === 'MISSING_FILE' || error.code === 'MISSING_PARENT') { rec.error = error.message; return; }
+  if (error.code === 'READ_ONLY') {
+    // Ortak defterde yazma iznim yok (rolüm görüntüleyene çevrilmiş olabilir): yerel değişiklik bırakılır, sunucudaki sürüm geri gelir.
+    rec.dirty = false; rec.stale = true; rec.error = undefined;
+    persist(rec, true);
+    if (rec.entity === 'page') { loadedNotebooks.delete((rec.data as Page).notebookId); emit({type: 'pages-updated', notebookId: (rec.data as Page).notebookId}); }
+    if (!reported.has('ro:' + rec.id)) { reported.add('ro:' + rec.id); emit({type: 'toast', kind: 'info', message: `${error.message} Değişikliğin bu defterde kaydedilmedi.`}); }
+    return;
+  }
   const field = typeof error.body.field === 'string' ? error.body.field : '';
   if (field) console.warn('[Kalemlik] sunucu kaydı reddetti:', rec.entity, rec.id, field, error.message);
   // Son çare: sayfadaki tek bir öğe (çizgi, metin, sticker) hâlâ reddediliyorsa yalnızca o öğe çıkarılır ve sayfa
@@ -396,6 +466,25 @@ const dropped = new Map<string, number>();
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const strip = (d: object) => { const {rev: _r, updatedAt: _u, createdAt: _c, ...rest} = d as Record<string, unknown>; void _r; void _u; void _c; return rest; };
+
+/**
+ * Sayfa çakışması: aynı sayfa başka yerde de değişmiş. Kopya sayfa açmak yerine öğe öğe birleştirilir (çizgi, metin,
+ * sticker); birleşmiş sürüm yeniden gönderilir. Ortak defterlerde iki kişinin aynı anda yazması böylece kaybolmaz.
+ */
+async function mergeConflict(rec: LocalRecord, theirs: Page) {
+  const base = await getBase(rec.id, rec.rev);
+  const cur = getRecord('page', rec.id) || rec;
+  const mine = (cur.data as Page).content || (rec.data as Page).content!;
+  const merged = mergePage(base, mine, theirs.content!);
+  setBase(rec.id, theirs.rev, theirs.content);
+  const changed = !same(merged, theirs.content);
+  const next: LocalRecord = {...cur, data: {...theirs, position: (cur.data as Page).position, content: merged}, rev: theirs.rev, dirty: changed || (cur.data as Page).position !== theirs.position, version: cur.version + 1};
+  tables.get('page')!.set(rec.id, next);
+  persist(next, true);
+  emitChange('page');
+  emit({type: 'pages-updated', notebookId: theirs.notebookId});
+  syncAgain = true;
+}
 
 /** Çakışma çözümü: içerik aynıysa sunucu revizyonu benimsenir; farklıysa hiçbir sürüm kaybolmaz. */
 function resolveConflict(rec: LocalRecord, current: EntityMap[EntityName]) {
@@ -447,7 +536,12 @@ async function pull() {
   if (!userId) return;
   const cursorKey = `${userId}|cursor`;
   const since = (await idbGet<number>('meta', cursorKey).catch(() => 0)) || 0;
-  const res = await api<{cursor: number; records: Record<EntityName, EntityMap[EntityName][]>; deletions: {entity: EntityName; id: string}[]}>(`/api/sync?since=${since}`);
+  const res = await api<{cursor: number; records: Record<EntityName, EntityMap[EntityName][]>; deletions: {entity: EntityName; id: string}[]; collab?: ({notebookId: string} & CollabInfo)[]}>(`/api/sync?since=${since}`);
+  const previousCollab = collab;
+  if (res.collab) {
+    setCollab(new Map(res.collab.map(c => [c.notebookId, {role: c.role, owner: c.owner}])));
+    void idbPut('meta', `${userId}|collab`, [...collab.entries()]).catch(() => {});
+  }
   const touchedNotebooks = new Set<string>();
   for (const entity of ENTITY_NAMES) {
     const incoming = res.records[entity] || [];
@@ -474,7 +568,10 @@ async function pull() {
   }
   for (const d of res.deletions) {
     const local = getRecord(d.entity, d.id);
-    if (local && !local.dirty) {
+    // Üyeliği biten ortak defter (ve sayfaları) yerelde bekleyen değişiklik olsa da kaldırılır: artık yazma izni yok.
+    const nbId = !local ? '' : d.entity === 'notebook' ? d.id : d.entity === 'page' ? (local.data as Page).notebookId : '';
+    const formerMember = !!nbId && (previousCollab.get(nbId)?.role ?? 'owner') !== 'owner' && !collab.has(nbId);
+    if (local && (!local.dirty || formerMember)) {
       removeLocal(d.entity, d.id);
       if (d.entity === 'page') touchedNotebooks.add((local.data as Page).notebookId);
     }

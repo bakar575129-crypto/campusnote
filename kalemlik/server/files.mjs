@@ -119,8 +119,13 @@ export function createFiles({pool, config}) {
 
   router.get('/files/:id', async (req, res, next) => {
     const id = uuid.parse(req.params.id);
-    const [[file]] = await pool.execute('SELECT mime,name FROM files WHERE id=? AND user_id=?', [id, req.user.id]);
-    if (!file) throw new HttpError(404, 'Dosya bulunamadı.', 'NOT_FOUND');
+    const [[file]] = await pool.execute('SELECT mime,name,user_id FROM files WHERE id=?', [id]);
+    // Kendi dosyası ya da ortak bir defteri paylaştığı kişinin dosyası (ortak defterdeki görseller, stickerlar).
+    const allowed = file && (file.user_id === req.user.id || (await pool.execute(
+      `SELECT 1 AS x FROM notebook_members m JOIN notebooks n ON n.id=m.notebook_id
+        WHERE m.status='accepted' AND ((m.user_id=? AND (n.user_id=? OR EXISTS (SELECT 1 FROM notebook_members o WHERE o.notebook_id=n.id AND o.user_id=? AND o.status='accepted')))
+                                    OR (n.user_id=? AND m.user_id=?)) LIMIT 1`, [req.user.id, file.user_id, file.user_id, req.user.id, file.user_id]))[0].length > 0);
+    if (!allowed) throw new HttpError(404, 'Dosya bulunamadı.', 'NOT_FOUND');
     res.set({
       'Content-Type': file.mime,
       'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
@@ -128,7 +133,7 @@ export function createFiles({pool, config}) {
       'Cache-Control': 'private, max-age=31536000, immutable',
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     });
-    res.sendFile(path.join(userDir(req.user.id), id), {dotfiles: 'deny'}, error => {
+    res.sendFile(path.join(userDir(file.user_id), id), {dotfiles: 'deny'}, error => {
       if (error && !res.headersSent) next(new HttpError(404, 'Dosya okunamadı.', 'NOT_FOUND'));
     });
   });

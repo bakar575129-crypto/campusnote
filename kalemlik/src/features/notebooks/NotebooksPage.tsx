@@ -1,11 +1,14 @@
 import {useMemo, useRef, useState} from 'react';
-import {Layers, Target, Sparkles, BookOpen, Copy, FileUp, LayoutGrid, List, MoreVertical, Palette, PenLine, Plus, RotateCcw, Search, Star, Trash2, X, CalendarClock, ListChecks} from 'lucide-react';
+import {Users, Share2, LogOut, Layers, Target, Sparkles, BookOpen, Copy, FileUp, LayoutGrid, List, MoreVertical, Palette, PenLine, Plus, RotateCcw, Search, Star, Trash2, X, CalendarClock, ListChecks} from 'lucide-react';
 import type {Notebook} from '@/lib/types';
 import {PageHeader} from '@/app/Shell';
 import {linkProps, navigate} from '@/app/router';
 import {Badge, Button, EmptyState, IconButton, Menu, Segmented} from '@/components/ui';
 import {confirmDialog, toast} from '@/components/feedback';
-import {list, loadNotebookPages, notebookPages, remove, update, useList} from '@/lib/store';
+import {list, loadNotebookPages, notebookPages, refreshCollab, remove, update, useCollab, useList} from '@/lib/store';
+import {ShareDialog} from '@/features/share/ShareDialog';
+import {api} from '@/lib/api';
+import {getSession} from '@/app/session';
 import {DAYS, minutesOf, relativeDay, timeAgo, todayIso, weekday} from '@/lib/format';
 import {CoverView} from './CoverView';
 import {NotebookDialog} from './NotebookDialog';
@@ -53,8 +56,16 @@ function Today() {
 function NotebookCard({nb, mode, view, onEdit, onCover}: {nb: Notebook; mode: Mode; view: 'grid' | 'list'; onEdit: () => void; onCover: () => void}) {
   const pages = useList('page').filter(p => p.notebookId === nb.id).length;
   const [menu, setMenu] = useState(false);
+  const [share, setShare] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
+  const collab = useCollab(nb.id);
+  const member = !!collab && collab.role !== 'owner';
   const open = () => { if (mode !== 'trash') navigate(`/defter/${nb.id}`); };
+  const leave = async () => {
+    if (!(await confirmDialog({title: 'Ortak defterden ayrılınsın mı?', message: `"${nb.title}" senin listenden kalkar. Sahibi yeniden davet edebilir.`, confirmLabel: 'Ayrıl', danger: true}))) return;
+    const {user} = getSession();
+    try { await api(`/api/notebooks/${nb.id}/members/${user!.id}`, {method: 'DELETE'}); refreshCollab(); toast('Defterden ayrıldın.', 'info'); } catch (e) { toast(e instanceof Error ? e.message : 'Ayrılamadın.', 'error'); }
+  };
   return (
     <article className={`nb-card nb-${view}`}>
       <button type="button" className="nb-open" onClick={open} aria-label={`${nb.title} defterini aç`} disabled={mode === 'trash'}>
@@ -66,7 +77,7 @@ function NotebookCard({nb, mode, view, onEdit, onCover}: {nb: Notebook; mode: Mo
           {mode !== 'trash' && <IconButton size="sm" label={nb.favorite ? 'Favorilerden çıkar' : 'Favorilere ekle'} active={nb.favorite} onClick={() => toggleFavorite(nb)}><Star size={17} fill={nb.favorite ? 'currentColor' : 'none'} /></IconButton>}
           <IconButton size="sm" ref={btn} label="Defter işlemleri" onClick={() => setMenu(true)}><MoreVertical size={18} /></IconButton>
         </div>
-        <p className="nb-meta">{[nb.course, nb.term].filter(Boolean).join(' · ') || 'Ders belirtilmemiş'}</p>
+        <p className="nb-meta">{collab && <span className={`shared-badge ${member ? 'is-member' : ''}`} title={member ? `${collab.owner} paylaştı` : 'Başkalarıyla paylaşılıyor'}><Users size={12} />{member ? `${collab.owner} · ${collab.role === 'editor' ? 'düzenleyici' : 'görüntüleyen'}` : 'Ortak'}</span>}{[nb.course, nb.term].filter(Boolean).join(' · ') || (collab ? '' : 'Ders belirtilmemiş')}</p>
         <p className="nb-meta muted">{pages} sayfa · {mode === 'trash' && nb.trashedAt ? `silindi ${timeAgo(nb.trashedAt)}` : timeAgo(nb.updatedAt)}</p>
       </div>
       <Menu anchor={btn.current} open={menu} onClose={() => setMenu(false)} label="Defter işlemleri" items={mode === 'trash' ? [
@@ -74,16 +85,17 @@ function NotebookCard({nb, mode, view, onEdit, onCover}: {nb: Notebook; mode: Mo
         {label: 'Kalıcı olarak sil', icon: <Trash2 size={17} />, danger: true, onSelect: () => void deleteForever(nb)},
       ] : [
         {label: 'Aç', icon: <BookOpen size={17} />, onSelect: open},
-        {label: 'Bilgileri düzenle / yeniden adlandır', icon: <PenLine size={17} />, onSelect: onEdit},
-        {label: 'Kapağı tasarla', icon: <Palette size={17} />, onSelect: onCover},
+        ...(member ? [] : [{label: 'Bilgileri düzenle / yeniden adlandır', icon: <PenLine size={17} />, onSelect: onEdit}, {label: 'Kapağı tasarla', icon: <Palette size={17} />, onSelect: onCover}]),
+        {label: '🔗 Paylaş', icon: <Share2 size={17} />, onSelect: () => setShare(true)},
         {label: '🪄 Flashcard oluştur', icon: <Layers size={17} />, onSelect: () => openGenerate({kind: 'flashcards', source: {kind: 'notebook', id: nb.id}})},
         {label: '🎯 Quiz oluştur', icon: <Target size={17} />, onSelect: () => openGenerate({kind: 'quiz', source: {kind: 'notebook', id: nb.id}})},
         {label: '✨ Kalemlik AI’ya sor', icon: <Sparkles size={17} />, onSelect: () => navigate(`/ai?kaynak=notebook&id=${nb.id}`)},
         {label: nb.favorite ? 'Favorilerden çıkar' : 'Favorilere ekle', icon: <Star size={17} />, onSelect: () => toggleFavorite(nb)},
         {label: 'Kopyasını oluştur', icon: <Copy size={17} />, onSelect: () => void duplicateNotebook(nb, id => loadNotebookPages(id))},
         'sep',
-        {label: 'Çöp kutusuna taşı', icon: <Trash2 size={17} />, danger: true, onSelect: () => trashNotebook(nb)},
+        member ? {label: 'Ortak defterden ayrıl', icon: <LogOut size={17} />, danger: true, onSelect: () => void leave()} : {label: 'Çöp kutusuna taşı', icon: <Trash2 size={17} />, danger: true, onSelect: () => trashNotebook(nb)},
       ]} />
+      {share && <ShareDialog notebookId={nb.id} onClose={() => setShare(false)} />}
     </article>
   );
 }

@@ -1,5 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {GraduationCap, Mic, Search, Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
+import {Users, GraduationCap, Mic, Search, Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
 import {Brand} from '@/components/Brand';
 import {linkProps, navigate, useLocation} from './router';
 import {logout, useSession} from './session';
@@ -17,6 +17,7 @@ export const NAV = [
   {to: '/notlarim', label: 'Notlarım', icon: GraduationCap},
   {to: '/kayitlar', label: 'Kayıtlar', icon: Mic},
   {to: '/ai', label: 'Kalemlik AI', icon: Sparkles},
+  {to: '/paylasimlar', label: 'Paylaşımlar', icon: Users},
   {to: '/odak', label: 'Odaklan', icon: Timer},
   {to: '/cop', label: 'Çöp Kutusu', icon: Trash2},
 ];

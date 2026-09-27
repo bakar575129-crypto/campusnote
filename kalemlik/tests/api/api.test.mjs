@@ -533,3 +533,120 @@ test('ders kaydı: ses dosyası imzayla doğrulanır; sunucuda metne çevirme an
   const other = client();
   assert.equal((await other('GET', '/api/widget/today')).status, 401, 'oturum gerekir');
 });
+
+test('ortak defter: davet, kabul, görüntüleyici/düzenleyici yetkisi, geçmiş, ayrılma; paylaşım bağlantıları', async () => {
+  const owner = client(), ed = client(), vw = client(), stranger = client();
+  await owner('POST', '/api/auth/register', {name: 'Sahip', email: 'sahip@ornek.com', password: 'guclu-sifre-101'});
+  await ed('POST', '/api/auth/register', {name: 'Editör', email: 'editor@ornek.com', password: 'guclu-sifre-102'});
+  await vw('POST', '/api/auth/register', {name: 'İzleyici', email: 'izleyici@ornek.com', password: 'guclu-sifre-103'});
+  await stranger('POST', '/api/auth/register', {name: 'Yabancı', email: 'yabanci@ornek.com', password: 'guclu-sifre-104'});
+  const nb = randomUUID(), pg = randomUUID();
+  await owner('PUT', `/api/sync/notebook/${nb}`, {rev: 0, data: notebook({title: 'Ortak Fizik'})});
+  const stroke = {id: 's1', t: 'pen', pen: 'ballpoint', c: '#222222', w: 3, o: 1, pts: [10, 10, 0.5, 20, 20, 0.6]};
+  await owner('PUT', `/api/sync/page/${pg}`, {rev: 0, data: page(nb, {strokes: [stroke]})});
+
+  // Davet: yalnızca sahip; kayıtlı olmayan e-posta; kendine davet
+  let r = await ed('POST', `/api/notebooks/${nb}/members`, {email: 'izleyici@ornek.com', role: 'viewer'});
+  assert.equal(r.status, 404, 'üye olmayan davet edemez');
+  r = await owner('POST', `/api/notebooks/${nb}/members`, {email: 'yok@ornek.com', role: 'viewer'});
+  assert.equal(r.body.code, 'NO_USER');
+  r = await owner('POST', `/api/notebooks/${nb}/members`, {email: 'sahip@ornek.com', role: 'viewer'});
+  assert.equal(r.status, 400);
+  assert.equal((await owner('POST', `/api/notebooks/${nb}/members`, {email: 'editor@ornek.com', role: 'editor'})).status, 201);
+  assert.equal((await owner('POST', `/api/notebooks/${nb}/members`, {email: 'izleyici@ornek.com', role: 'viewer'})).status, 201);
+
+  // Kabul etmeden defter görünmez
+  r = await ed('GET', '/api/sync?since=0');
+  assert.equal(r.body.records.notebook.length, 0);
+  r = await ed('GET', '/api/shares');
+  assert.equal(r.body.invites[0].title, 'Ortak Fizik');
+  assert.equal(r.body.invites[0].owner, 'Sahip');
+  const cursorBefore = (await ed('GET', '/api/sync?since=0')).body.cursor;
+  await ed('POST', `/api/notebooks/${nb}/invite/accept`);
+  await vw('POST', `/api/notebooks/${nb}/invite/accept`);
+  r = await ed('GET', `/api/sync?since=${cursorBefore}`);
+  assert.equal(r.body.records.notebook[0].id, nb, 'kabul edilen defter, imleç ileride olsa da gelir');
+  assert.equal(r.body.records.page[0].id, pg);
+  assert.deepEqual(r.body.collab, [{notebookId: nb, role: 'editor', owner: 'Sahip'}]);
+  assert.equal((await owner('GET', '/api/sync?since=0')).body.collab[0].role, 'owner');
+  r = await vw('GET', `/api/notebooks/${nb}/pages`);
+  assert.equal(r.body.pages[0].content.strokes.length, 1, 'görüntüleyici içeriği okur');
+
+  // Görüntüleyici yazamaz / silemez; düzenleyici yazar, sayfa ekler, siler
+  r = await vw('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: []})});
+  assert.equal(r.status, 403);
+  assert.equal(r.body.code, 'READ_ONLY');
+  r = await vw('DELETE', `/api/sync/page/${pg}?rev=1`);
+  assert.equal(r.status, 403);
+  r = await ed('PUT', `/api/sync/page/${pg}`, {rev: 1, data: page(nb, {strokes: [stroke, {...stroke, id: 's2'}]})});
+  assert.equal(r.status, 200);
+  assert.equal(r.body.rev, 2);
+  const pg2 = randomUUID();
+  r = await ed('PUT', `/api/sync/page/${pg2}`, {rev: 0, data: {...page(nb), position: 2}});
+  assert.equal(r.status, 200, 'düzenleyici sayfa ekler');
+  r = await owner('GET', `/api/notebooks/${nb}/pages`);
+  assert.equal(r.body.pages.length, 2, 'eklenen sayfa sahibin defterinde');
+  // Defter bilgisi yalnızca sahipte değişir; üyenin gönderdiği sessizce yok sayılır
+  r = await ed('PUT', `/api/sync/notebook/${nb}`, {rev: 1, data: notebook({title: 'Ele geçirildi'})});
+  assert.equal(r.status, 200);
+  assert.equal((await owner('GET', '/api/sync?since=0')).body.records.notebook.find(n => n.id === nb).title, 'Ortak Fizik');
+  // Yabancı hiçbir şeye erişemez
+  assert.equal((await stranger('GET', `/api/notebooks/${nb}/pages`)).status, 404);
+  assert.equal((await stranger('PUT', `/api/sync/page/${pg}`, {rev: 2, data: page(nb)})).body.code, 'ID_TAKEN');
+  assert.equal((await stranger('GET', `/api/notebooks/${nb}/collab`)).status, 404);
+  assert.equal((await stranger('GET', `/api/notebooks/${nb}/changes?since=0`)).status, 404);
+
+  // Yakın gerçek zamanlı değişiklik akışı, geçmiş ve son düzenleyen
+  r = await owner('GET', `/api/notebooks/${nb}/changes?since=0`);
+  assert.equal(r.body.pages.length, 2);
+  assert.ok(r.body.pages.find(p => p.id === pg).content.strokes.length === 2, 'değişiklik içerikle gelir');
+  r = await owner('GET', `/api/notebooks/${nb}/collab`);
+  assert.equal(r.body.members.length, 2);
+  assert.ok(r.body.activity.some(a => a.name === 'Editör' && a.action === 'edit_page'));
+  assert.equal(r.body.pages.find(p => p.id === pg).lastEditor, 'Editör');
+  assert.equal((await ed('GET', `/api/notebooks/${nb}/collab`)).body.members[0].email, undefined, 'üyeler e-postaları görmez');
+
+  // Düzenleyici sayfa siler → sahip ve üyelerin cihazlarından da silinir
+  r = await ed('DELETE', `/api/sync/page/${pg2}?rev=1`);
+  assert.equal(r.status, 200);
+  r = await owner('GET', '/api/sync?since=0');
+  assert.ok(r.body.deletions.some(d => d.id === pg2));
+
+  // Rol değiştirme ve çıkarma: çıkarılan üyenin cihazından defter kalkar
+  assert.equal((await ed('PATCH', `/api/notebooks/${nb}/members/${(await owner('GET', `/api/notebooks/${nb}/collab`)).body.members[1].userId}`, {role: 'editor'})).status, 403, 'rolü yalnızca sahip değiştirir');
+  const vwId = (await owner('GET', `/api/notebooks/${nb}/collab`)).body.members.find(m => m.name === 'İzleyici').userId;
+  await owner('DELETE', `/api/notebooks/${nb}/members/${vwId}`);
+  r = await vw('GET', '/api/sync?since=0');
+  assert.ok(r.body.deletions.some(d => d.entity === 'notebook' && d.id === nb), 'çıkarılan üyenin cihazından silinir');
+  assert.equal(r.body.records.notebook.length, 0);
+
+  // Paylaşım bağlantısı: gizli → erişilemez, bağlantı → görüntülenir, herkese açık → Keşfet'te
+  r = await ed('POST', `/api/notebooks/${nb}/links`, {visibility: 'link'});
+  assert.equal(r.status, 403, 'bağlantıyı yalnızca sahip oluşturur');
+  r = await owner('POST', `/api/notebooks/${nb}/links`, {visibility: 'private', pageId: pg});
+  const link = r.body.link.id;
+  assert.match(link, /^[A-Za-z0-9_-]{22}$/);
+  const anon = client();
+  assert.equal((await anon('GET', `/api/public/share/${link}`)).status, 404, 'gizli bağlantı açılmaz');
+  await owner('PATCH', `/api/links/${link}`, {visibility: 'link'});
+  r = await anon('GET', `/api/public/share/${link}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.title, 'Ortak Fizik');
+  assert.equal(r.body.owner, 'Sahip');
+  assert.equal(r.body.pages.length, 1, 'yalnızca paylaşılan sayfa');
+  assert.equal(r.body.pageOnly, true);
+  assert.equal((await anon('GET', '/api/public/gallery')).body.items.length, 0, 'bağlantılı paylaşım Keşfet’te görünmez');
+  await owner('PATCH', `/api/links/${link}`, {visibility: 'public'});
+  assert.equal((await anon('GET', '/api/public/gallery')).body.items[0].id, link);
+  assert.equal((await anon('GET', `/api/public/share/${link}/files/${randomUUID()}`)).status, 404, 'paylaşımda olmayan dosya verilmez');
+  assert.equal((await stranger('DELETE', `/api/links/${link}`)).status, 200);
+  assert.equal((await anon('GET', `/api/public/share/${link}`)).status, 200, 'başkası bağlantıyı kapatamaz');
+  await owner('DELETE', `/api/links/${link}`);
+  assert.equal((await anon('GET', `/api/public/share/${link}`)).status, 404, 'kapatılan bağlantı açılmaz');
+  assert.equal((await anon('GET', '/api/public/share/kisa')).status, 400, 'geçersiz bağlantı kimliği');
+
+  // Ayrılma: üye kendisi ayrılır
+  const edId = (await owner('GET', `/api/notebooks/${nb}/collab`)).body.members[0].userId;
+  await ed('DELETE', `/api/notebooks/${nb}/members/${edId}`);
+  assert.equal((await ed('GET', `/api/notebooks/${nb}/pages`)).status, 404);
+});

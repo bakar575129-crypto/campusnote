@@ -123,3 +123,6 @@ export function cachedImage(id: string, onReady?: () => void): HTMLImageElement 
   void loadImage(id).then(i => { if (i) { loadedImages.set(id, i); onReady?.(); } });
   return null;
 }
+
+/** Paylaşım sayfası gibi oturumsuz görünümlerde dosya adresini önceden tanıtır (çizim aynı yoldan yapılır). */
+export function primeFileUrl(id: string, url: string) { if (!urls.has(id)) urls.set(id, url); }

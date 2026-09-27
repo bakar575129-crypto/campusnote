@@ -18,8 +18,9 @@ import {createAiRouter} from './aiRoutes.mjs';
 import {createSearch} from './search.mjs';
 import {createTranscribe} from './transcribe.mjs';
 import {createWidget} from './widget.mjs';
+import {createPublicShare, createSharing, memberNotebookIds} from './sharing.mjs';
 
-const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai', '/ara', '/notlarim', '/kayitlar', '/kayitlar/:id', '/gunluk', '/widget'];
+const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai', '/ara', '/notlarim', '/kayitlar', '/kayitlar/:id', '/gunluk', '/widget', '/paylasimlar', '/share/note/:id'];
 
 export function createApp({pool, config, appSettings = createAppSettings(pool), ocr = createOcr(config, {appSettings}), ai = createAi(config, {appSettings}), mailer = createMailer(config)}) {
   void appSettings.refresh();
@@ -85,6 +86,8 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
     billingEnabled: !!config.billing.provider,
   }));
   app.use('/api/auth', auth.router);
+  // Herkese açık / bağlantıyla paylaşılan notlar: oturum gerekmez (yalnızca paylaşılan içerik ve dosyaları).
+  app.use('/api/public', createPublicShare({pool, config}));
 
   // ---- bundan sonrası oturum ister
   app.use('/api', auth.requireAuth);
@@ -92,7 +95,8 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
   app.use('/api', createFiles({pool, config}));
   app.use('/api/admin', createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink: auth.createResetLink}));
   app.use('/api/ai', createAiRouter({pool, ai}));
-  app.use('/api', createSearch({pool}));
+  app.use('/api', createSearch({pool, memberNotebookIds: uid => memberNotebookIds(pool, uid)}));
+  app.use('/api', createSharing({pool, mailer, config}));
   app.use('/api', createTranscribe({pool, config, appSettings}));
   app.use('/api', createWidget({pool}));
 

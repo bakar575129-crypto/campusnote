@@ -25,6 +25,8 @@ import {startBrowserNotifier} from '@/features/notify/notifications';
 import {RecordingDetail, RecordingsPage} from '@/features/recordings/RecordingsPage';
 import {JournalPage} from '@/features/journal/JournalPage';
 import {WidgetPage} from '@/features/home/WidgetPage';
+import {SharesPage} from '@/features/share/SharesPage';
+import {PublicSharePage} from '@/features/share/PublicSharePage';
 import {onStoreEvent, useList} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
 import {setCustomFonts} from '@/features/fonts/fonts';
@@ -103,6 +105,7 @@ function SignedIn() {
     case '/notlarim': page = <GradesPage />; break;
     case '/kayitlar': page = <RecordingsPage />; break;
     case '/gunluk': page = <JournalPage />; break;
+    case '/paylasimlar': page = <SharesPage />; break;
     default: page = <NotebooksPage mode="all" />;
   }
   return <Shell><CustomFonts />{page}<GenerateHost /></Shell>;
@@ -113,11 +116,13 @@ export function App() {
   const {path} = useLocation();
   useStoreEvents();
   useEffect(() => {
-    if (status === 'signed-out' && !PUBLIC.includes(path)) navigate('/giris', {replace: true});
+    if (status === 'signed-out' && !PUBLIC.includes(path) && !path.startsWith('/share/note/')) navigate('/giris', {replace: true});
     if (status === 'signed-in' && PUBLIC.includes(path)) navigate('/defterler', {replace: true});
   }, [status, path]);
   let content;
-  if (status === 'loading') content = <Splash />;
+  const shared = match('/share/note/:id', path);
+  if (shared && status !== 'loading') content = <PublicSharePage id={shared.id} signedIn={status === 'signed-in'} />;
+  else if (status === 'loading') content = <Splash />;
   else if (status === 'signed-out') {
     content = path === '/kayit' ? <RegisterPage /> : path === '/sifremi-unuttum' ? <ForgotPage /> : path === '/sifre-sifirla' ? <ResetPage /> : <LoginPage />;
   } else content = <SignedIn />;

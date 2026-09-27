@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore} from 'react';
-import {Target, Sparkles, ArrowLeft, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, ChevronUp, ClipboardPaste, Copy, CopyPlus, Download, FileImage, FileUp, Info, Layers, LayoutTemplate, Lock, LockOpen, Maximize, MoreHorizontal, Palette, PenLine, Plus, Redo2, ScanText, Star, Trash2, Undo2, Wand2, ZoomIn, ZoomOut, X, MoveHorizontal, Settings2, Hand as HandIcon} from 'lucide-react';
+import {Share2, Eye, Target, Sparkles, ArrowLeft, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, ChevronUp, ClipboardPaste, Copy, CopyPlus, Download, FileImage, FileUp, Info, Layers, LayoutTemplate, Lock, LockOpen, Maximize, MoreHorizontal, Palette, PenLine, Plus, Redo2, ScanText, Star, Trash2, Undo2, Wand2, ZoomIn, ZoomOut, X, MoveHorizontal, Settings2, Hand as HandIcon} from 'lucide-react';
 import type {Page, PageContent, Placed, Stroke, TextBox} from '@/lib/types';
 import {deviceOcrSupported, plausibleText, recognizeOnDevice, warmDeviceOcr} from './deviceOcr';
 import {INK_COLORS} from '@/lib/constants';
@@ -10,7 +10,8 @@ import {Button, Dialog, Field, IconButton, Menu, Popover, type MenuItem} from '@
 import {confirmDialog, toast} from '@/components/feedback';
 import {api} from '@/lib/api';
 import {saveFile} from '@/lib/files';
-import {get, loadNotebookPages, onStoreEvent, put, remove, update, useList, useRecord} from '@/lib/store';
+import {applyRemoteDeletion, applyRemotePage, get, loadNotebookPages, onStoreEvent, put, remove, update, useCollab, useList, useRecord} from '@/lib/store';
+import {ShareDialog} from '@/features/share/ShareDialog';
 import {useSettings} from '@/lib/settings';
 import {shortId, uuid} from '@/lib/ids';
 import {CoverView} from '@/features/notebooks/CoverView';
@@ -69,6 +70,26 @@ function CoverStage({nb, first, onEnter, onEditCover}: {nb: NonNullable<ReturnTy
 
 export default function EditorPage({id}: {id: string}) {
   const nb = useRecord('notebook', id);
+  // Ortak defter: rolüm (görüntüleyen salt okunur) ve birkaç saniyede bir diğer kişilerin değişiklikleri.
+  const collabInfo = useCollab(id);
+  const [shareOpen, setShareOpen] = useState(false);
+  useEffect(() => {
+    if (!collabInfo) return;
+    let since = Date.now() - 60_000, alive = true, busy = false;
+    const tick = async () => {
+      if (busy || !navigator.onLine || document.visibilityState !== 'visible') return;
+      busy = true;
+      try {
+        const r = await api<{now: number; pages: Page[]; deleted: string[]}>(`/api/notebooks/${id}/changes?since=${since}`);
+        if (!alive) return;
+        for (const p of r.pages) await applyRemotePage(p);
+        for (const d of r.deleted) applyRemoteDeletion('page', d);
+        since = r.now;
+      } catch { /* çevrimdışı ya da üyelik bitti: sonraki eşitleme halleder */ } finally { busy = false; }
+    };
+    const t = setInterval(() => void tick(), 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, [id, !!collabInfo]); // eslint-disable-line react-hooks/exhaustive-deps
   const allPages = useList('page');
   const pages = useMemo(() => allPages.filter(p => p.notebookId === id).sort(byPosition), [allPages, id]);
   const settings = useSettings();
@@ -497,7 +518,8 @@ export default function EditorPage({id}: {id: string}) {
     return <div className="editor-missing"><p>Defter bulunamadı ya da henüz bu cihaza gelmedi.</p><Button onClick={() => navigate('/defterler')}>Defterlerime dön</Button></div>;
   }
 
-  const writable = index > 0 && !!content;
+  const readOnly = collabInfo?.role === 'viewer';
+  const writable = index > 0 && !!content && !readOnly;
   const zoomPct = Math.round((view.zoom / Math.max(0.01, canvas.current?.fitZoom() || view.zoom)) * 100);
   const gap = content ? writingGuide(content).gap : 36;
   const moreItems: (MenuItem | 'sep')[] = [
@@ -511,6 +533,7 @@ export default function EditorPage({id}: {id: string}) {
     {label: 'Fotoğrafı sayfa yap', icon: <FileImage size={17} />, onSelect: () => imgInput.current?.click()},
     {label: 'PDF olarak indir', icon: <Download size={17} />, onSelect: () => void exportPdf()},
     'sep',
+    {label: '🔗 Paylaş', icon: <Share2 size={17} />, onSelect: () => setShareOpen(true)},
     {label: '🪄 Flashcard oluştur', icon: <Layers size={17} />, onSelect: () => openGenerate({kind: 'flashcards', source: {kind: 'notebook', id}})},
     {label: '🎯 Quiz oluştur', icon: <Target size={17} />, onSelect: () => openGenerate({kind: 'quiz', source: {kind: 'notebook', id}})},
     {label: '✨ Kalemlik AI’ya sor', icon: <Sparkles size={17} />, onSelect: () => navigate(`/ai?kaynak=notebook&id=${id}`)},
@@ -519,7 +542,7 @@ export default function EditorPage({id}: {id: string}) {
     {label: 'Kapağı düzenle', icon: <Palette size={17} />, onSelect: () => setCoverEdit(true)},
     {label: 'Defter bilgileri / yeniden adlandır', icon: <Info size={17} />, onSelect: () => setInfo(true)},
     {label: nb.favorite ? 'Favorilerden çıkar' : 'Favorilere ekle', icon: <Star size={17} />, onSelect: () => toggleFavorite(nb)},
-    {label: 'Çöp kutusuna taşı', icon: <Trash2 size={17} />, danger: true, onSelect: () => { trashNotebook(nb); navigate('/defterler'); }},
+    ...(collabInfo && collabInfo.role !== 'owner' ? [] : [{label: 'Çöp kutusuna taşı', icon: <Trash2 size={17} />, danger: true, onSelect: () => { trashNotebook(nb); navigate('/defterler'); }}]),
   ];
 
   const selectionTools = hasSelection(selection) && (
@@ -547,6 +570,7 @@ export default function EditorPage({id}: {id: string}) {
         <span className="spacer" />
         <div className="editor-top-group">
           <IconButton label="Sayfa şablonu ve renkleri" disabled={!writable} onClick={e => setPanel({kind: 'template', anchor: e.currentTarget})}><LayoutTemplate size={20} /></IconButton>
+          <IconButton label="Paylaş" active={!!collabInfo} onClick={() => setShareOpen(true)}><Share2 size={20} /></IconButton>
           <IconButton label="Akıllı yazı güzelleştirme" active={settings.write.mode === 'beautify'} onClick={e => setPanel({kind: 'write', anchor: e.currentTarget})}><Wand2 size={20} /></IconButton>
           <IconButton label="Yalnızca kalem / yakınlaştırma kilidi" active={settings.penOnly || settings.zoomLock} onClick={e => setPanel({kind: 'view', anchor: e.currentTarget})}><Settings2 size={20} /></IconButton>
           <Button size="sm" variant="ghost" icon={<Layers size={18} />} onClick={() => setShowPages(!showPages)} aria-expanded={showPages}>{index === 0 ? 'Kapak' : `${index} / ${pages.length}`}</Button>
@@ -554,6 +578,7 @@ export default function EditorPage({id}: {id: string}) {
           <IconButton label="Diğer işlemler" onClick={e => setMenu(e.currentTarget)}><MoreHorizontal size={22} /></IconButton>
         </div>
       </header>
+      {readOnly && <div className="readonly-banner"><Eye size={16} /><span>Bu defteri <strong>{collabInfo?.owner}</strong> seninle paylaştı · yalnızca görüntüleyebilirsin</span></div>}
 
       <div className="editor-body">
         <ToolRail tool={tool} settings={settings} side={settings.railSide} disabled={!writable}
@@ -627,6 +652,7 @@ export default function EditorPage({id}: {id: string}) {
       <input ref={imgInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importPagesFrom(f, 'image'); }} />
 
       <Menu anchor={menu} open={!!menu} onClose={() => setMenu(null)} label="Diğer işlemler" items={moreItems} />
+      {shareOpen && <ShareDialog notebookId={id} pageId={page?.id} onClose={() => setShareOpen(false)} />}
       <Popover anchor={panel?.anchor || null} open={!!panel} onClose={() => setPanel(null)} label="Panel" placement="bottom">
         {panel?.kind === 'template' && content && page && <TemplatePanel content={content}
           onChange={patch => commit({...content, ...patch})}
