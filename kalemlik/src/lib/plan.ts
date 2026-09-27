@@ -1,9 +1,10 @@
 import {useEffect, useSyncExternalStore} from 'react';
 import {api} from './api';
 
+export interface PlanFeatures {aiFlashcards: boolean; aiQuiz: boolean; aiPlan: boolean; transcription: boolean; premiumTemplates: boolean; collaboration: boolean; maxCollaborators: number}
 export interface PlanInfo {
-  plan: {id: string; name: string; storageBytes: number; notebookLimit: number | null; ocrDailyLimit: number; subscription: null | {status: string; periodEnd: number; cancelAtPeriodEnd: boolean; provider: string}};
-  plans: {id: string; name: string; storageBytes: number; notebookLimit: number | null; ocrDailyLimit: number; priceMonthly: number; currency: string}[];
+  plan: {id: string; name: string; storageBytes: number; notebookLimit: number | null; ocrDailyLimit: number; aiDailyLimit?: number; features?: PlanFeatures; subscription: null | {status: string; periodEnd: number; cancelAtPeriodEnd: boolean; provider: string}};
+  plans: {id: string; name: string; storageBytes: number; notebookLimit: number | null; ocrDailyLimit: number; aiDailyLimit?: number; features?: PlanFeatures; priceMonthly: number; currency: string}[];
   billingEnabled: boolean;
   supportEmail: string;
   usage: {usedBytes: number; fileCount: number; quotaBytes: number};

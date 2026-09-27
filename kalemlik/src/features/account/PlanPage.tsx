@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {BookOpen, Check, FileImage, FileType2, HardDrive, ScanText, Sparkles, Trash2} from 'lucide-react';
+import {BookOpen, Check, X, FileImage, FileType2, HardDrive, ScanText, Sparkles, Trash2} from 'lucide-react';
 import {PageHeader} from '@/app/Shell';
 import {Badge, Button, ProgressBar} from '@/components/ui';
 import {confirmDialog, toast} from '@/components/feedback';
@@ -72,7 +72,14 @@ export function PlanPage() {
                 <li><Check size={16} /> {formatBytes(p.storageBytes)} depolama</li>
                 <li><Check size={16} /> {p.notebookLimit ? `Aynı anda ${p.notebookLimit} defter` : 'Sınırsız defter'}</li>
                 <li><Check size={16} /> Günde {p.ocrDailyLimit} el yazısı tanıma</li>
-                <li><Check size={16} /> Tüm kalemler, şablonlar, PDF ve çevrimdışı kullanım</li>
+                {p.aiDailyLimit !== undefined && <li><Check size={16} /> Günde {p.aiDailyLimit} Kalemlik AI isteği</li>}
+                {p.features && <>
+                  <li className={p.features.aiFlashcards && p.features.aiQuiz && p.features.aiPlan ? '' : 'is-off'}>{p.features.aiFlashcards && p.features.aiQuiz && p.features.aiPlan ? <Check size={16} /> : <X size={16} />} AI flashcard, quiz ve çalışma planı</li>
+                  <li className={p.features.transcription ? '' : 'is-off'}>{p.features.transcription ? <Check size={16} /> : <X size={16} />} Ders kaydını sunucuda metne çevirme</li>
+                  <li className={p.features.premiumTemplates ? '' : 'is-off'}>{p.features.premiumTemplates ? <Check size={16} /> : <X size={16} />} Premium şablonlar</li>
+                  <li className={p.features.collaboration ? '' : 'is-off'}>{p.features.collaboration ? <Check size={16} /> : <X size={16} />} Ortak defter{p.features.collaboration ? ` (defter başına ${p.features.maxCollaborators} kişi)` : ''}</li>
+                </>}
+                <li><Check size={16} /> Tüm kalemler, temel şablonlar, PDF ve çevrimdışı kullanım</li>
               </ul>
               {!current && p.id !== 'free' && <Button variant="primary" icon={<Sparkles size={17} />} busy={busy === p.id} onClick={() => void checkout(p.id)}>{info.billingEnabled ? `${p.name}'a geç` : 'Yükseltme iste'}</Button>}
               {current && plan.subscription && !plan.subscription.cancelAtPeriodEnd && plan.subscription.provider !== 'manual' && <Button variant="ghost" onClick={() => void cancel()}>Yenilemeyi iptal et</Button>}

@@ -22,7 +22,7 @@ await page.fill('#name', 'Test Öğrenci');
 await page.fill('#email', email);
 await page.fill('#password', 'guclu-sifre-123');
 await page.click('button[type=submit]');
-await page.waitForURL('**/defterler');
+await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 await shot('01-defterler-bos');
 
 step('defter oluştur');
@@ -149,14 +149,14 @@ step('ayarlar, hesap, plan');
 for (const [url, name] of [['/ayarlar', '11-ayarlar'], ['/hesap', '12-hesap'], ['/plan', '13-plan']]) { await page.goto(BASE + url); await page.waitForTimeout(500); await shot(name); }
 
 step('çöp kutusu');
-await page.getByRole('link', {name: 'Defterlerim'}).click();
+await page.getByRole('link', {name: 'Defterler', exact: true}).click();
 await page.getByRole('button', {name: 'Defter işlemleri'}).first().click();
 await page.getByRole('menuitem', {name: 'Çöp kutusuna taşı'}).click();
 await page.getByRole('link', {name: 'Çöp Kutusu'}).click();
 await page.waitForSelector('.nb-card');
 await page.getByRole('button', {name: 'Defter işlemleri'}).first().click();
 await page.getByRole('menuitem', {name: 'Geri getir'}).click();
-await page.getByRole('link', {name: 'Defterlerim'}).click();
+await page.getByRole('link', {name: 'Defterler', exact: true}).click();
 await page.waitForSelector('.nb-card');
 await shot('14-defterler');
 

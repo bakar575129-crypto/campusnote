@@ -27,7 +27,7 @@ const zoomText = () => page.locator('.zoom-pct').innerText();
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Dokunmatik'); await page.fill('#email', `t${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 await page.getByRole('button', {name: 'Yeni defter'}).first().click();
 await page.fill('#nb-title', 'Tablet'); await page.getByRole('button', {name: 'Defteri oluştur'}).click();
 await page.waitForURL('**/defter/**'); await page.getByRole('button', {name: 'İlk sayfaya geç'}).click();

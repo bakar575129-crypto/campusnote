@@ -22,7 +22,7 @@ const api = (method, url, body) => page.evaluate(async ([method, url, body]) => 
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Çalışkan Öğrenci'); await page.fill('#email', `s${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 
 step('ders notu olan bir defter (sunucuya eşitlenmiş)');
 const nb = randomUUID();

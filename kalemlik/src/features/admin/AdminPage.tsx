@@ -244,9 +244,78 @@ function SystemTab() {
   );
 }
 
+
+interface AdminTemplate {id: string; name: string; category: string; description: string; premium: boolean; price: number; uses: number; active: boolean; builtin: boolean; sortOrder: number; content: unknown}
+function TemplateDialog({t, categories, onClose, onSaved}: {t: AdminTemplate | null; categories: string[]; onClose: () => void; onSaved: () => void}) {
+  const [f, setF] = useState({id: t ? t.id : '', name: t?.name || '', category: t?.category || categories[0], description: t?.description || '', premium: !!t?.premium, price: t?.price || 0, sortOrder: t?.sortOrder ?? 500,
+    content: JSON.stringify(t?.content || {paper: 'lined', color: '#3a6ff7', cover: {pattern: 'theme'}, pages: [{template: 'lined', texts: [{x: 60, y: 40, w: 880, text: 'Başlık', size: 30, color: '#33415c', bold: true}]}]}, null, 1)});
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    let content: unknown;
+    try { content = JSON.parse(f.content); } catch { toast('İçerik geçerli bir JSON değil.', 'error'); return; }
+    setBusy(true);
+    try {
+      const body = {name: f.name, category: f.category, description: f.description, premium: f.premium, price: Number(f.price) || 0, sortOrder: Number(f.sortOrder) || 0, content};
+      if (t) await api(`/api/admin/templates/${t.id}`, {method: 'PATCH', json: body});
+      else await api('/api/admin/templates', {method: 'POST', json: {...body, id: f.id}});
+      toast('Şablon kaydedildi.', 'success'); onSaved(); onClose();
+    } catch (e) { toast(msg(e), 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onClose={onClose} size="lg" title={t ? `Şablonu düzenle: ${t.name}` : 'Yeni şablon'} footer={<><Button variant="ghost" onClick={onClose}>Vazgeç</Button><Button variant="primary" busy={busy} onClick={() => void save()}>Kaydet</Button></>}>
+      <div className="stack">
+        {!t && <Field label="Kimlik" hint="Küçük harf, rakam ve tire (ör. kimya-foyu)" htmlFor="tp-id"><input id="tp-id" className="input" value={f.id} onChange={e => setF({...f, id: e.target.value})} /></Field>}
+        <Field label="Ad" htmlFor="tp-name"><input id="tp-name" className="input" value={f.name} onChange={e => setF({...f, name: e.target.value})} /></Field>
+        <Field label="Kategori" htmlFor="tp-cat"><select id="tp-cat" className="select" value={f.category} onChange={e => setF({...f, category: e.target.value})}>{categories.map(c => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Açıklama" htmlFor="tp-desc"><textarea id="tp-desc" className="input" rows={2} value={f.description} onChange={e => setF({...f, description: e.target.value})} /></Field>
+        <div className="row wrap">
+          <Field label="Fiyat (₺, 0 = plana dahil)" htmlFor="tp-price"><input id="tp-price" className="input" type="number" min={0} value={f.price} onChange={e => setF({...f, price: Number(e.target.value)})} /></Field>
+          <Field label="Sıra" htmlFor="tp-sort"><input id="tp-sort" className="input" type="number" value={f.sortOrder} onChange={e => setF({...f, sortOrder: Number(e.target.value)})} /></Field>
+        </div>
+        <Switch label="Premium" description="Yalnızca planında premium şablonlar açık olanlar kullanabilir." checked={f.premium} onChange={v => setF({...f, premium: v})} />
+        <Field label="İçerik (JSON)" hint="paper, color, cover.pattern ve sayfalar (template + başlık metinleri). Sunucu doğrular." htmlFor="tp-content"><textarea id="tp-content" className="input mono" rows={10} value={f.content} onChange={e => setF({...f, content: e.target.value})} /></Field>
+      </div>
+    </Dialog>
+  );
+}
+
+function TemplatesTab() {
+  const [data, setData] = useState<{categories: string[]; items: AdminTemplate[]} | null>(null);
+  const [edit, setEdit] = useState<AdminTemplate | null | 'new'>(null);
+  const load = useCallback(async () => { try { setData(await api('/api/admin/templates')); } catch (e) { toast(msg(e), 'error'); } }, []);
+  useEffect(() => { void load(); }, [load]);
+  const patch = async (t: AdminTemplate, body: Partial<AdminTemplate>) => { try { await api(`/api/admin/templates/${t.id}`, {method: 'PATCH', json: body}); await load(); } catch (e) { toast(msg(e), 'error'); } };
+  if (!data) return <p className="muted">Yükleniyor…</p>;
+  return (
+    <div className="stack">
+      <div className="row"><p className="muted small">Mağazadaki şablonlar. Kapatılan şablon mağazada görünmez; hazır şablonlar silinmez, kapatılır.</p><span className="spacer" /><Button variant="primary" onClick={() => setEdit('new')}>Yeni şablon</Button></div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Şablon</th><th>Kategori</th><th>Kullanım</th><th>Premium</th><th>Yayında</th><th /></tr></thead>
+          <tbody>
+            {data.items.map(t => (
+              <tr key={t.id} className={t.active ? '' : 'is-muted'}>
+                <td><strong>{t.name}</strong><div className="muted small">{t.id}{t.builtin ? ' · hazır' : ''}</div></td>
+                <td>{t.category}</td>
+                <td>{t.uses}</td>
+                <td><input type="checkbox" checked={t.premium} aria-label={`${t.name} premium`} onChange={e => void patch(t, {premium: e.target.checked})} /></td>
+                <td><input type="checkbox" checked={t.active} aria-label={`${t.name} yayında`} onChange={e => void patch(t, {active: e.target.checked})} /></td>
+                <td className="row"><Button size="sm" variant="ghost" onClick={() => setEdit(t)}>Düzenle</Button>
+                  {!t.builtin && <Button size="sm" variant="ghost" className="danger-text" onClick={async () => { if (await confirmDialog({title: 'Şablon silinsin mi?', message: `"${t.name}" mağazadan kaldırılır. Bu şablonla oluşturulmuş defterler etkilenmez.`, confirmLabel: 'Sil', danger: true})) { await api(`/api/admin/templates/${t.id}`, {method: 'DELETE'}).catch(e => toast(msg(e), 'error')); await load(); } }}>Sil</Button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {edit && <TemplateDialog t={edit === 'new' ? null : edit} categories={data.categories} onClose={() => setEdit(null)} onSaved={() => void load()} />}
+    </div>
+  );
+}
+
 export function AdminPage() {
   const {user} = useSession();
-  const [tab, setTab] = useState<'users' | 'plans' | 'system'>('users');
+  const [tab, setTab] = useState<'users' | 'plans' | 'templates' | 'system'>('users');
   const [stats, setStats] = useState<Stats | null>(null);
   const [plans, setPlans] = useState<AdminPlan[]>([]);
   const loadPlans = () => api<{plans: AdminPlan[]}>('/api/admin/plans').then(r => setPlans(r.plans)).catch(() => {});
@@ -263,9 +332,10 @@ export function AdminPage() {
           <StatCard icon={<HardDrive size={20} />} label="toplam depolama" value={formatBytes(stats.storageBytes)} hint={`${stats.fileCount} dosya`} />
         </div>
       )}
-      <Segmented label="Yönetim bölümü" value={tab} onChange={setTab} options={[{value: 'users', label: 'Kullanıcılar'}, {value: 'plans', label: 'Planlar'}, {value: 'system', label: 'Sistem'}]} />
+      <Segmented label="Yönetim bölümü" value={tab} onChange={setTab} options={[{value: 'users', label: 'Kullanıcılar'}, {value: 'plans', label: 'Planlar'}, {value: 'templates', label: 'Şablonlar'}, {value: 'system', label: 'Sistem'}]} />
       {tab === 'users' && <UsersTab plans={plans} />}
       {tab === 'plans' && <PlansTab plans={plans} onChanged={() => void loadPlans()} />}
+      {tab === 'templates' && <TemplatesTab />}
       {tab === 'system' && <SystemTab />}
     </div>
   );

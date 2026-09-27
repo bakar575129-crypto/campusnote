@@ -53,7 +53,7 @@ export function LoginPage() {
   const {config} = useSession();
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
-    try { await login(email, password); navigate('/defterler', {replace: true}); } catch (err) { setError(message(err)); } finally { setBusy(false); }
+    try { await login(email, password); navigate('/', {replace: true}); } catch (err) { setError(message(err)); } finally { setBusy(false); }
   };
   return (
     <AuthLayout title="Tekrar hoş geldin" subtitle="Defterlerine devam etmek için giriş yap.">
@@ -77,7 +77,7 @@ export function RegisterPage() {
   const {config} = useSession();
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError('');
-    try { await register(name, email, password); navigate('/defterler', {replace: true}); } catch (err) { setError(message(err)); } finally { setBusy(false); }
+    try { await register(name, email, password); navigate('/', {replace: true}); } catch (err) { setError(message(err)); } finally { setBusy(false); }
   };
   if (config && !config.registrationOpen) {
     return <AuthLayout title="Kayıt kapalı" subtitle="Bu sitede yeni hesap oluşturma şu anda kapalı."><a {...linkProps('/giris')}>Giriş sayfasına dön</a></AuthLayout>;

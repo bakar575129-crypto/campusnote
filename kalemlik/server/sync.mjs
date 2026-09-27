@@ -11,7 +11,7 @@ const OVERLAP_MS = 5000;
 const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 const MAX_SETTINGS_BYTES = 64 * 1024;
 
-export function createSync({pool}) {
+export function createSync({pool, xp}) {
   const router = Router();
 
   // Kayıt önce onarılır (eski/bozuk istemci verisi reddedilmesin), sonra sıkı şemayla doğrulanır.
@@ -170,12 +170,18 @@ export function createSync({pool}) {
         const allCols = ['id', 'user_id', ...cols, ...extraCols, 'created_at', 'updated_at', 'rev'];
         await db.execute(`INSERT INTO ${def.table} (${allCols.join(',')}) VALUES (${allCols.map(() => '?').join(',')})`, [id, ownerId, ...values, ...extraVals, now, now, 1]);
         await db.execute('DELETE FROM deletions WHERE user_id=? AND entity=? AND entity_id=?', [userId, entity, id]);
-        return {rev: 1};
+        return {rev: 1, own: ownerId === userId, prev: null};
       }
       const sets = [...cols, ...extraCols].map(c => `${c}=?`).join(',');
       await db.execute(`UPDATE ${def.table} SET ${sets}, updated_at=?, rev=rev+1 WHERE id=? AND user_id=?`, [...values, ...extraVals, now, id, ownerId]);
-      return {rev: existing.rev + 1};
+      return {rev: existing.rev + 1, own: ownerId === userId, prev: entity === 'page' ? null : fromRow(entity, existing)};
     });
+    if (result.prev !== undefined) {
+      // XP: kaydın önceki ve yeni hâlinden sunucu hesaplar (istemci XP göndermez). Yanıtı bekletmez.
+      if (xp && result.own && entity !== 'page') void xp.onWrite(userId, entity, id, data, result.prev);
+      res.json({rev: result.rev, updatedAt: now});
+      return;
+    }
     res.json({...result, updatedAt: now});
   });
 

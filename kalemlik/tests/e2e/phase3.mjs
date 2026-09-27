@@ -17,7 +17,7 @@ const shot = async n => { if (SHOTS) await page.screenshot({path: `${SHOTS}/${n}
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Kayıt Test'); await page.fill('#email', `p3${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 
 step('ders kaydı: başlat, işaretle, duraklat, devam, bitir');
 await page.goto(BASE + '/kayitlar');

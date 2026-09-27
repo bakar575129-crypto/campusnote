@@ -12,7 +12,7 @@ const step = s => console.log('•', s);
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Çevrimdışı'); await page.fill('#email', `o${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 await page.getByRole('button', {name: 'Yeni defter'}).first().click();
 await page.fill('#nb-title', 'Yolda Notlar'); await page.getByRole('button', {name: 'Defteri oluştur'}).click();
 await page.waitForURL('**/defter/**');

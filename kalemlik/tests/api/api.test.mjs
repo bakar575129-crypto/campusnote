@@ -650,3 +650,101 @@ test('ortak defter: davet, kabul, görüntüleyici/düzenleyici yetkisi, geçmi�
   await ed('DELETE', `/api/notebooks/${nb}/members/${edId}`);
   assert.equal((await ed('GET', `/api/notebooks/${nb}/pages`)).status, 404);
 });
+
+test('XP: kurallar sunucuda, tekrar ve günlük sınır; rozetler; istemci XP gönderemez', async () => {
+  const u = client(), other = client();
+  await u('POST', '/api/auth/register', {name: 'Xp Öğrenci', email: 'xp@ornek.com', password: 'guclu-sifre-201'});
+  await other('POST', '/api/auth/register', {name: 'Başka', email: 'xp2@ornek.com', password: 'guclu-sifre-202'});
+  const wait = () => new Promise(r => setTimeout(r, 150)); // XP yanıttan sonra yazılır
+  let r = await u('GET', '/api/progress');
+  assert.equal(r.body.xp, 0);
+  assert.equal(r.body.level, 1);
+  assert.equal(r.body.badges.length, 8);
+
+  // Yeni not +5 ve 🏆 İlk Not
+  const nb = randomUUID();
+  await u('PUT', `/api/sync/notebook/${nb}`, {rev: 0, data: notebook()});
+  await wait();
+  r = await u('GET', '/api/progress');
+  assert.equal(r.body.xp, 5);
+  assert.ok(r.body.badges.find(b => b.id === 'first_note').earnedAt, 'İlk Not rozeti');
+  // Aynı defteri güncellemek XP vermez
+  await u('PUT', `/api/sync/notebook/${nb}`, {rev: 1, data: notebook({title: 'Yeni ad'})});
+
+  // Görev tamamla +10; geri alıp yeniden tamamlamak ikinci kez vermez
+  const task = randomUUID();
+  const t = (done, rev) => u('PUT', `/api/sync/task/${task}`, {rev, data: {title: 'Ödev', course: '', description: '', dueDate: '2026-10-10', dueTime: '', category: 'homework', color: '#2f6fed', done, completedAt: done ? Date.now() : null}});
+  await t(false, 0); await t(true, 1); await t(false, 2); await t(true, 3);
+  await wait();
+  assert.equal((await u('GET', '/api/progress')).body.xp, 15);
+
+  // 30 dk odak +20; kısa ya da süresi tutarsız oturum vermez
+  const focus = (secs, wall) => u('PUT', `/api/sync/focus/${randomUUID()}`, {rev: 0, data: {topic: '', course: '', plannedMinutes: 30, focusedSeconds: secs, completed: true, startedAt: Date.now() - wall, endedAt: Date.now()}});
+  await focus(1800, 1800 * 1000); await focus(600, 600 * 1000); await focus(3600, 60 * 1000);
+  await wait();
+  assert.equal((await u('GET', '/api/progress')).body.xp, 35);
+
+  // Günlük +5 (günde bir kez)
+  for (const day of ['2026-09-01', '2026-09-02']) await u('PUT', `/api/sync/journal/${randomUUID()}`, {rev: 0, data: {day, title: '', body: 'Bugün çalıştım.', mood: 'good'}});
+  await wait();
+  r = await u('GET', '/api/progress');
+  assert.equal(r.body.xp, 40, 'günlük XP günde bir kez');
+  assert.equal(r.body.today, 40);
+  assert.equal(r.body.streak, 1);
+  assert.ok(r.body.recent.some(x => x.label === 'Görev tamamla'));
+
+  // Günlük sınır: aynı gün 20'den fazla görev XP'si verilmez
+  for (let i = 0; i < 22; i++) await u('PUT', `/api/sync/task/${randomUUID()}`, {rev: 0, data: {title: 'G' + i, course: '', description: '', dueDate: '', dueTime: '', category: 'homework', color: '#2f6fed', done: true, completedAt: Date.now()}});
+  await wait();
+  assert.equal((await u('GET', '/api/progress')).body.xp, 40 + 19 * 10, 'görev XP günde en fazla 20 kez');
+
+  // İstemci XP gönderemez: bilinmeyen alanlar yok sayılır, uç nokta yok
+  assert.equal((await u('POST', '/api/progress', {xp: 99999})).status, 404);
+  assert.equal((await other('GET', '/api/progress')).body.xp, 0, 'XP kullanıcıya özel');
+  assert.equal((await client()('GET', '/api/progress')).status, 401);
+});
+
+test('şablon mağazası: kategoriler, premium kilidi, kullanım sayısı, yönetim', async () => {
+  const admin = client(), u = client();
+  assert.equal((await admin('POST', '/api/auth/login', {email: 'ayse@ornek.com', password: 'guclu-sifre-123'})).status, 200);
+  await u('POST', '/api/auth/register', {name: 'Şablon Sever', email: 'sablon@ornek.com', password: 'guclu-sifre-301'});
+  let r = await u('GET', '/api/templates');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.categories.length, 13);
+  for (const c of r.body.categories) assert.ok(r.body.items.some(i => i.category === c), `${c} kategorisinde şablon var`);
+  const free = r.body.items.find(i => !i.premium), prem = r.body.items.find(i => i.premium);
+  assert.equal(prem.locked, true, 'ücretsiz planda premium kilitli');
+  assert.equal(free.locked, false);
+  r = await u('POST', `/api/templates/${free.id}/use`);
+  assert.equal(r.status, 200);
+  assert.ok(r.body.content.pages.length >= 1);
+  assert.equal((await u('GET', '/api/templates')).body.items.find(i => i.id === free.id).uses, free.uses + 1);
+  r = await u('POST', `/api/templates/${prem.id}/use`);
+  assert.equal(r.status, 402);
+  assert.equal(r.body.code, 'PREMIUM_REQUIRED');
+  assert.equal((await u('POST', '/api/templates/yok-boyle/use')).status, 404);
+  assert.equal((await u('POST', '/api/templates/..%2Fx/use')).status, 400);
+
+  // Yönetim: yalnızca yönetici; yeni şablon, düzenleme, kapatma
+  assert.equal((await u('GET', '/api/admin/templates')).status, 403);
+  const content = {paper: 'grid', color: '#123456', cover: {pattern: 'grid'}, pages: [{template: 'grid', texts: [{x: 60, y: 40, w: 500, text: 'Başlık', size: 28, color: '#222222', bold: true}]}]};
+  r = await admin('POST', '/api/admin/templates', {id: 'ozel-kimya', name: 'Kimya föyü', category: 'Matematik', description: 'Deneme', premium: false, content});
+  assert.equal(r.status, 201);
+  assert.equal((await admin('POST', '/api/admin/templates', {id: 'bozuk', name: 'Xx', category: 'Yok', content})).status, 400);
+  assert.equal((await admin('POST', '/api/admin/templates', {id: 'bozuk2', name: 'Xx', category: 'Minimal', content: {...content, pages: [{template: '<script>', texts: []}]}})).status, 400);
+  assert.ok((await u('GET', '/api/templates')).body.items.some(i => i.id === 'ozel-kimya'));
+  await admin('PATCH', '/api/admin/templates/ozel-kimya', {premium: true});
+  assert.equal((await u('GET', '/api/templates')).body.items.find(i => i.id === 'ozel-kimya').locked, true);
+  await admin('DELETE', `/api/admin/templates/${free.id}`);
+  assert.ok(!(await u('GET', '/api/templates')).body.items.some(i => i.id === free.id), 'kapatılan şablon mağazada görünmez');
+  assert.ok((await admin('GET', '/api/admin/templates')).body.items.some(i => i.id === free.id && !i.active), 'hazır şablon silinmez, kapatılır');
+  await admin('PATCH', `/api/admin/templates/${free.id}`, {active: true});
+
+  // Plan yükseltilince premium açılır (yönetici abonelik verir)
+  const uid = (await u('GET', '/api/auth/me')).body.user.id;
+  assert.equal((await admin('POST', `/api/admin/users/${uid}/subscription`, {planId: 'plus', days: 30})).status, 200);
+  r = await u('GET', '/api/templates');
+  assert.equal(r.body.premiumAccess, true);
+  assert.equal(r.body.items.find(i => i.id === prem.id).locked, false);
+  assert.equal((await u('POST', `/api/templates/${prem.id}/use`)).status, 200);
+});

@@ -20,7 +20,7 @@ async function user(name, tag, viewport = {width: 1280, height: 860}) {
   const email = `${tag}${stamp}@ornek.com`;
   await page.goto(BASE + '/kayit');
   await page.fill('#name', name); await page.fill('#email', email); await page.fill('#password', 'guclu-sifre-123');
-  await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+  await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
   const api = (method, url, body) => page.evaluate(async ([m, u, b]) => {
     const r = await fetch(u, {method: m, headers: {'content-type': 'application/json', 'x-kalemlik': '1'}, body: b ? JSON.stringify(b) : undefined});
     return {status: r.status, body: await r.json().catch(() => ({}))};

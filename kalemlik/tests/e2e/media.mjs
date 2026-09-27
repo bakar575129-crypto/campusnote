@@ -28,7 +28,7 @@ const step = s => console.log('•', s);
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Medya Test'); await page.fill('#email', `m${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 
 step('PDF içe aktar → defter');
 await page.locator('input[type=file][accept*="pdf"]').first().setInputFiles(pdfPath);

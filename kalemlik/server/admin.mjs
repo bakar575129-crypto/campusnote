@@ -32,12 +32,13 @@ const planBody = z.object({name: z.string().trim().min(1).max(60), storageMb: z.
   features: z.object({aiFlashcards: z.boolean(), aiQuiz: z.boolean(), aiPlan: z.boolean(), transcription: z.boolean(), premiumTemplates: z.boolean(), collaboration: z.boolean(), maxCollaborators: z.number().int().min(0).max(10_000)}).partial().optional()});
 const settingsBody = z.object({ocrApiKey: z.string().trim().max(300).optional(), ocrModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional(), aiModel: z.string().trim().max(80).regex(/^[A-Za-z0-9._:-]*$/).optional()});
 
-export function createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink}) {
+export function createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink, extra = []}) {
   const router = Router();
   router.use((req, res, next) => {
     if (req.user?.role !== 'admin') return next(new HttpError(403, 'Bu bölüm yalnızca yöneticiler içindir.', 'FORBIDDEN'));
     next();
   });
+  for (const r of extra) router.use(r); // ör. şablon yönetimi (server/templates.mjs)
 
   router.get('/stats', async (req, res) => {
     const now = Date.now(), day = 86400000;

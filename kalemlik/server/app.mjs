@@ -7,6 +7,8 @@ import {HttpError} from './errors.mjs';
 import {memoryLimiter, rateLimit} from './security.mjs';
 import {createAuth} from './auth.mjs';
 import {createSync} from './sync.mjs';
+import {createXp} from './xp.mjs';
+import {createTemplates} from './templates.mjs';
 import {createFiles} from './files.mjs';
 import {createMailer} from './mail.mjs';
 import {createOcr} from './ocr.mjs';
@@ -20,7 +22,7 @@ import {createTranscribe} from './transcribe.mjs';
 import {createWidget} from './widget.mjs';
 import {createPublicShare, createSharing, memberNotebookIds} from './sharing.mjs';
 
-const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai', '/ara', '/notlarim', '/kayitlar', '/kayitlar/:id', '/gunluk', '/widget', '/paylasimlar', '/share/note/:id'];
+const SPA_ROUTES = ['/', '/giris', '/kayit', '/sifremi-unuttum', '/sifre-sifirla', '/defterler', '/defter/:id', '/program', '/gorevler', '/odak', '/takvim', '/favoriler', '/cop', '/ayarlar', '/hesap', '/plan', '/yonetim', '/calisma', '/calisma/deste/:id', '/calisma/quiz/:id', '/calisma/plan/:id', '/ai', '/ara', '/notlarim', '/kayitlar', '/kayitlar/:id', '/gunluk', '/widget', '/paylasimlar', '/share/note/:id', '/sablonlar', '/dersler', '/profil'];
 
 export function createApp({pool, config, appSettings = createAppSettings(pool), ocr = createOcr(config, {appSettings}), ai = createAi(config, {appSettings}), mailer = createMailer(config)}) {
   void appSettings.refresh();
@@ -91,9 +93,13 @@ export function createApp({pool, config, appSettings = createAppSettings(pool), 
 
   // ---- bundan sonrası oturum ister
   app.use('/api', auth.requireAuth);
-  app.use('/api', createSync({pool}));
+  const xp = createXp({pool});
+  const templates = createTemplates({pool});
+  app.use('/api', createSync({pool, xp}));
+  app.use('/api', xp.router);
+  app.use('/api', templates.router);
   app.use('/api', createFiles({pool, config}));
-  app.use('/api/admin', createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink: auth.createResetLink}));
+  app.use('/api/admin', createAdmin({pool, config, mailer, ocr, ai, appSettings, createResetLink: auth.createResetLink, extra: [templates.admin]}));
   app.use('/api/ai', createAiRouter({pool, ai}));
   app.use('/api', createSearch({pool, memberNotebookIds: uid => memberNotebookIds(pool, uid)}));
   app.use('/api', createSharing({pool, mailer, config}));

@@ -24,7 +24,7 @@ const pageWith = (nb, text, extra = {}) => ({notebookId: nb, position: 1, conten
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Arama Test'); await page.fill('#email', `p2${Date.now()}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 
 step('veri: iki defter (biri favori), PDF metinli sayfa, sınav, ödev, zayıf konulu quiz');
 const nb1 = randomUUID(), nb2 = randomUUID(), pg1 = randomUUID();

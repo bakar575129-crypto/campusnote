@@ -1,5 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {Users, GraduationCap, Mic, Search, Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
+import {House, Library, ShoppingBag, CircleUserRound, NotebookPen, Users, GraduationCap, Mic, Search, Shield, Brain, Sparkles, BookOpen, CalendarClock, CalendarDays, CloudOff, HardDrive, ListChecks, LogOut, Menu as MenuIcon, MoreHorizontal, RefreshCw, Settings, Star, Timer, Trash2, UserRound, Check, AlertCircle} from 'lucide-react';
 import {Brand} from '@/components/Brand';
 import {linkProps, navigate, useLocation} from './router';
 import {logout, useSession} from './session';
@@ -8,17 +8,25 @@ import {NotificationBell} from '@/features/notify/NotificationCenter';
 import {timeAgo} from '@/lib/format';
 
 export const NAV = [
-  {to: '/defterler', label: 'Defterlerim', icon: BookOpen},
-  {to: '/favoriler', label: 'Favoriler', icon: Star},
-  {to: '/program', label: 'Ders Programı', icon: CalendarClock},
-  {to: '/gorevler', label: 'Ödevler & Sınavlar', icon: ListChecks},
+  {to: '/', label: 'Ana Sayfa', icon: House},
+  {to: '/dersler', label: 'Dersler', icon: Library},
+  {to: '/defterler', label: 'Defterler', icon: BookOpen},
   {to: '/takvim', label: 'Takvim', icon: CalendarDays},
+  {to: '/gorevler', label: 'Görevler', icon: ListChecks},
   {to: '/calisma', label: 'Çalışma', icon: Brain},
   {to: '/notlarim', label: 'Notlarım', icon: GraduationCap},
   {to: '/kayitlar', label: 'Kayıtlar', icon: Mic},
   {to: '/ai', label: 'Kalemlik AI', icon: Sparkles},
   {to: '/paylasimlar', label: 'Paylaşımlar', icon: Users},
+  {to: '/sablonlar', label: 'Şablonlar', icon: ShoppingBag},
+  {to: '/profil', label: 'Profil', icon: CircleUserRound},
+];
+/** Önceki sürümlerden gelen bölümler: menüde "Diğer" altında (hiçbiri kaldırılmadı). */
+export const NAV_MORE = [
+  {to: '/favoriler', label: 'Favoriler', icon: Star},
+  {to: '/program', label: 'Ders Programı', icon: CalendarClock},
   {to: '/odak', label: 'Odaklan', icon: Timer},
+  {to: '/gunluk', label: 'Günlük', icon: NotebookPen},
   {to: '/cop', label: 'Çöp Kutusu', icon: Trash2},
 ];
 export const NAV_BOTTOM = [
@@ -26,7 +34,7 @@ export const NAV_BOTTOM = [
   {to: '/ayarlar', label: 'Ayarlar', icon: Settings},
   {to: '/hesap', label: 'Hesabım', icon: UserRound},
 ];
-const TABS = ['/defterler', '/program', '/gorevler', '/odak'];
+const TABS = ['/', '/defterler', '/calisma', '/gorevler'];
 
 export function SyncBadge({compact = false}: {compact?: boolean}) {
   const s = useSyncState();
@@ -59,7 +67,7 @@ export function Shell({children}: {children: ReactNode}) {
   const {user} = useSession();
   const [open, setOpen] = useState(false);
   const [more, setMore] = useState(false);
-  const isActive = (to: string) => path === to || (to === '/defterler' && path === '/') || (to !== '/' && path.startsWith(to + '/'));
+  const isActive = (to: string) => path === to || (to !== '/' && path.startsWith(to + '/')) || (to === '/defterler' && path.startsWith('/defter/'));
   const bottom = user?.role === 'admin' ? [...NAV_BOTTOM, {to: '/yonetim', label: 'Yönetim', icon: Shield}] : NAV_BOTTOM;
   useEffect(() => { setOpen(false); setMore(false); }, [path]);
   // Ctrl/⌘ + K: her yerden arama.
@@ -74,6 +82,7 @@ export function Shell({children}: {children: ReactNode}) {
       <div className="sidebar-brand"><Brand /></div>
       <button type="button" className="search-trigger" onClick={() => navigate('/ara')}><Search size={18} /><span>Ara</span><kbd>Ctrl K</kbd></button>
       <div className="nav-group">{NAV.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
+      <div className="nav-group"><span className="nav-heading">Diğer</span>{NAV_MORE.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
       <div className="spacer" />
       <div className="nav-group">{bottom.map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} />)}</div>
       <div className="sidebar-foot">
@@ -98,7 +107,7 @@ export function Shell({children}: {children: ReactNode}) {
       <main className="main" id="main">{children}</main>
       <nav className="tabbar" aria-label="Hızlı menü">
         {NAV.filter(n => TABS.includes(n.to)).map(n => (
-          <a key={n.to} {...linkProps(n.to)} className={`tab ${isActive(n.to) ? 'is-active' : ''}`} aria-current={isActive(n.to) ? 'page' : undefined}><n.icon size={22} /><span>{n.label.split(' ')[0]}</span></a>
+          <a key={n.to} {...linkProps(n.to)} className={`tab ${isActive(n.to) ? 'is-active' : ''}`} aria-current={isActive(n.to) ? 'page' : undefined}><n.icon size={22} /><span>{n.to === '/' ? 'Ana Sayfa' : n.label.split(' ')[0]}</span></a>
         ))}
         <button type="button" className={`tab ${more ? 'is-active' : ''}`} onClick={() => setMore(!more)} aria-expanded={more}><MoreHorizontal size={22} /><span>Daha</span></button>
       </nav>
@@ -106,7 +115,7 @@ export function Shell({children}: {children: ReactNode}) {
         <>
           <div className="sidebar-scrim" onClick={() => setMore(false)} />
           <div className="more-sheet" role="dialog" aria-label="Diğer bölümler">
-            {[...NAV.filter(n => !TABS.includes(n.to)), ...bottom].map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} onClick={() => setMore(false)} />)}
+            {[...NAV.filter(n => !TABS.includes(n.to)), ...NAV_MORE, ...bottom].map(n => <NavLink key={n.to} {...n} active={isActive(n.to)} onClick={() => setMore(false)} />)}
           </div>
         </>
       )}

@@ -26,6 +26,10 @@ import {RecordingDetail, RecordingsPage} from '@/features/recordings/RecordingsP
 import {JournalPage} from '@/features/journal/JournalPage';
 import {WidgetPage} from '@/features/home/WidgetPage';
 import {SharesPage} from '@/features/share/SharesPage';
+import {HomePage} from '@/features/home/HomePage';
+import {CoursesPage} from '@/features/courses/CoursesPage';
+import {TemplatesPage} from '@/features/templates/TemplatesPage';
+import {ProfilePage} from '@/features/profile/ProfilePage';
 import {PublicSharePage} from '@/features/share/PublicSharePage';
 import {onStoreEvent, useList} from '@/lib/store';
 import {useSettings} from '@/lib/settings';
@@ -88,7 +92,11 @@ function SignedIn() {
   else if (quiz) page = <QuizPage key={quiz.id} id={quiz.id} />;
   else if (plan) page = <StudyPlanPage key={plan.id} id={plan.id} advice={query.get('oneri') || undefined} />;
   else switch (path) {
-    case '/': case '/defterler': page = <NotebooksPage mode="all" />; break;
+    case '/': page = <HomePage />; break;
+    case '/defterler': page = <NotebooksPage mode="all" />; break;
+    case '/dersler': page = <CoursesPage />; break;
+    case '/sablonlar': page = <TemplatesPage />; break;
+    case '/profil': page = <ProfilePage />; break;
     case '/favoriler': page = <NotebooksPage mode="favorites" />; break;
     case '/cop': page = <NotebooksPage mode="trash" />; break;
     case '/program': page = <SchedulePage />; break;
@@ -117,7 +125,7 @@ export function App() {
   useStoreEvents();
   useEffect(() => {
     if (status === 'signed-out' && !PUBLIC.includes(path) && !path.startsWith('/share/note/')) navigate('/giris', {replace: true});
-    if (status === 'signed-in' && PUBLIC.includes(path)) navigate('/defterler', {replace: true});
+    if (status === 'signed-in' && PUBLIC.includes(path)) navigate('/', {replace: true});
   }, [status, path]);
   let content;
   const shared = match('/share/note/:id', path);

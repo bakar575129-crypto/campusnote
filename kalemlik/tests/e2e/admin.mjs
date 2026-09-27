@@ -21,11 +21,11 @@ const stamp = Date.now();
 const student = await (await browser.newContext()).newPage();
 await student.goto(BASE + '/kayit');
 await student.fill('#name', 'Öğrenci Deniz'); await student.fill('#email', `ogr${stamp}@ornek.com`); await student.fill('#password', 'guclu-sifre-123');
-await student.click('button[type=submit]'); await student.waitForURL('**/defterler');
+await student.click('button[type=submit]'); await student.waitForSelector('.home-page'); await student.goto(BASE + '/defterler');
 
 await page.goto(BASE + '/kayit');
 await page.fill('#name', 'Yönetici Test'); await page.fill('#email', `adm${stamp}@ornek.com`); await page.fill('#password', 'guclu-sifre-123');
-await page.click('button[type=submit]'); await page.waitForURL('**/defterler');
+await page.click('button[type=submit]'); await page.waitForSelector('.home-page'); await page.goto(BASE + '/defterler');
 await db.execute("UPDATE users SET role='admin' WHERE email=?", [`adm${stamp}@ornek.com`]);
 await page.reload();
 
